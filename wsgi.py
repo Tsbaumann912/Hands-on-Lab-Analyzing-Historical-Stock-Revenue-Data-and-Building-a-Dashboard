@@ -2,7 +2,7 @@
 Quantitative Futures Trading Terminal — Desktop Web Application
 
 Run with:
-    python3 app.py
+    python3 wsgi.py
 
 Then open your browser at: http://127.0.0.1:8050
 """
@@ -39,14 +39,16 @@ from app.pages import (
 
 # ── Initialise Dash app ───────────────────────────────────────────────────────
 
+_assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "assets")
+
 application = dash.Dash(
     __name__,
+    assets_folder=_assets_dir,
     external_stylesheets=[
-        dbc.themes.CYBORG,
-        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        dbc.themes.FLATLY,
     ],
     suppress_callback_exceptions=True,
-    title="QuantTerminal — Futures & Research",
+    title="QuantTerminal",
     update_title=None,
     meta_tags=[
         {"name": "viewport", "content": "width=device-width, initial-scale=1"},
@@ -54,6 +56,13 @@ application = dash.Dash(
 )
 
 server = application.server   # expose Flask server for production deployment
+
+
+@server.route("/health")
+def _health():
+    return "ok", 200
+
+
 application.layout = root_layout()
 
 

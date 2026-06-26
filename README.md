@@ -25,16 +25,35 @@ futures-terminal/
 ## Quick Start
 
 ```bash
-# 1. Install all dependencies
-pip install -r requirements.txt
+# 1. Install web dependencies
+pip install -r requirements-web.txt
 
 # 2. Launch the desktop application (browser opens automatically)
-python3 app.py
+python3 wsgi.py
 # OR
 ./run.sh
 
 # The app opens at: http://127.0.0.1:8050
 ```
+
+## Live Demo — Permanent URL
+
+Deploy to **Render** (free tier) for a lasting `*.onrender.com` link that works after this session ends:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard)
+
+1. Click **Deploy to Render** above (or open [this link](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard))
+2. Sign in with GitHub (free Render account)
+3. Click **Apply** on the blueprint review screen
+4. Wait ~3–5 minutes for the build to finish
+
+Your permanent app URL will be:
+
+**https://quantterminal.onrender.com**
+
+> Free-tier services sleep after 15 minutes of inactivity; the first visit after sleep may take 30–60 seconds to wake up.
+
+Alternative hosts: `render.yaml`, `railway.toml`, `Dockerfile`, and `Procfile` are included for Railway, Hugging Face Spaces, or any Docker host.
 
 ### Desktop Application Pages
 
@@ -145,6 +164,20 @@ This project is designed to be extended via Cursor's Composer (`Cmd+I`):
 
 **Add a new indicator:**
 > "In `indicators/`, add a `vwap_bands` function that computes VWAP ± N standard deviations of price from VWAP, following the existing pattern in `volatility.py`."
+
+## Project Retrieval (QuantTermProj)
+
+The project is saved as tag **`QuantTermProj-v1.0.0`** and a portable bundle file `QuantTermProj-v1.0.0.bundle` in the repo root. See **`RESTORE.md`** for full instructions.
+
+```bash
+# Clone the project into a fresh QuantTermProj repo
+git clone --branch cursor/quant-futures-terminal-9269 \
+  https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard \
+  QuantTermProj
+cd QuantTermProj
+git remote set-url origin https://github.com/YOUR_USERNAME/QuantTermProj
+git push -u origin HEAD:main
+```
 
 ## Security
 

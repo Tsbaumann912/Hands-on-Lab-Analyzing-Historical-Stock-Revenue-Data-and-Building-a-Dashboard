@@ -9,8 +9,9 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dash import dcc, html, Input, Output, callback
-import dash_bootstrap_components as dbc
 
+from app.components import control_group, page_header, section_card
+from app.styles import DROPDOWN_STYLE
 from app.theme import COLORS
 from app.data_service import get_synthetic_futures_bars, compute_indicators_for_ui
 
@@ -19,7 +20,7 @@ CONTRACTS = ["ES", "NQ", "CL", "GC", "ZN", "SI", "NG", "ZB"]
 
 
 def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
-    df   = get_synthetic_futures_bars(contract, n=n_bars)
+    df = get_synthetic_futures_bars(contract, n=n_bars)
     inds = compute_indicators_for_ui(df)
     dates = df["Date"]
     close = df["Close"]
@@ -38,13 +39,12 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
         ],
     )
 
-    # ── Row 1: Price + BB + EMAs ──────────────────────────────────────────
     fig.add_trace(go.Scatter(
         x=dates, y=close, name="Close",
         mode="lines", line=dict(color=COLORS["text"], width=1.5),
     ), row=1, col=1)
 
-    for key, color, name in [("BB_upper", "#64748b", "BB Upper"), ("BB_lower", "#64748b", "BB Lower")]:
+    for key, color, name in [("BB_upper", "#86868b", "BB Upper"), ("BB_lower", "#86868b", "BB Lower")]:
         if key in inds:
             fig.add_trace(go.Scatter(
                 x=dates, y=inds[key], name=name, mode="lines",
@@ -55,7 +55,7 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
         fig.add_trace(go.Scatter(
             x=dates, y=inds["BB_lower"], name="BB Band",
             mode="lines", line=dict(color=COLORS["muted"], width=0),
-            fill="tonexty", fillcolor="rgba(100,116,139,0.07)",
+            fill="tonexty", fillcolor="rgba(134,134,139,0.06)",
             showlegend=False,
         ), row=1, col=1)
     if "BB_middle" in inds:
@@ -71,22 +71,18 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
                 mode="lines", line=dict(color=color, width=1.2, dash="dot"),
             ), row=1, col=1)
 
-    # ── Row 2: RSI ────────────────────────────────────────────────────────
     if "RSI_14" in inds:
         rsi = inds["RSI_14"]
         fig.add_trace(go.Scatter(
             x=dates, y=rsi, name="RSI (14)",
             mode="lines", line=dict(color=COLORS["blue"], width=1.3),
         ), row=2, col=1)
-        fig.add_hrect(y0=70, y1=100, fillcolor="rgba(239,68,68,0.05)",
-                      line_width=0, row=2, col=1)
-        fig.add_hrect(y0=0, y1=30, fillcolor="rgba(16,185,129,0.05)",
-                      line_width=0, row=2, col=1)
-        fig.add_hline(y=70, line=dict(color=COLORS["red"],   width=0.7, dash="dot"), row=2, col=1)
+        fig.add_hrect(y0=70, y1=100, fillcolor="rgba(255,59,48,0.05)", line_width=0, row=2, col=1)
+        fig.add_hrect(y0=0, y1=30, fillcolor="rgba(52,199,89,0.05)", line_width=0, row=2, col=1)
+        fig.add_hline(y=70, line=dict(color=COLORS["red"], width=0.7, dash="dot"), row=2, col=1)
         fig.add_hline(y=30, line=dict(color=COLORS["green"], width=0.7, dash="dot"), row=2, col=1)
         fig.add_hline(y=50, line=dict(color=COLORS["muted"], width=0.5, dash="dot"), row=2, col=1)
 
-    # ── Row 3: MACD ───────────────────────────────────────────────────────
     if "MACD_line" in inds:
         fig.add_trace(go.Scatter(
             x=dates, y=inds["MACD_line"], name="MACD",
@@ -103,15 +99,13 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
             marker_color=bar_colors, opacity=0.55,
         ), row=3, col=1)
 
-    # ── Row 4: ATR ────────────────────────────────────────────────────────
     if "ATR_14" in inds:
         fig.add_trace(go.Scatter(
             x=dates, y=inds["ATR_14"], name="ATR (14)",
             mode="lines", line=dict(color=COLORS["orange"], width=1.3),
-            fill="tozeroy", fillcolor="rgba(249,115,22,0.06)",
+            fill="tozeroy", fillcolor="rgba(255,149,0,0.06)",
         ), row=4, col=1)
 
-    # ── Row 5: OBV ────────────────────────────────────────────────────────
     if "OBV" in inds:
         fig.add_trace(go.Scatter(
             x=dates, y=inds["OBV"], name="OBV",
@@ -120,7 +114,7 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
 
     fig.update_layout(
         height=780,
-        title=f"{contract} — Full Indicator Suite",
+        title="",
         hovermode="x unified",
         legend=dict(orientation="h", y=1.03, x=0, font=dict(size=10)),
         xaxis_rangeslider_visible=False,
@@ -128,57 +122,62 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
     return fig
 
 
-# ── Layout ────────────────────────────────────────────────────────────────────
-
 def layout() -> html.Div:
     return html.Div([
-        html.Div([
-            html.H2("Indicator Explorer"),
-            html.P("Visualise all computed indicators from the quant terminal library on a single synchronised chart"),
-        ], className="page-header"),
+        page_header(
+            "Indicator Explorer",
+            "Visualise every indicator from the quant library on one synchronised chart.",
+            badge="Analysis",
+        ),
 
-        dbc.Row([
-            dbc.Col([
-                html.Div("Contract", className="form-label-dark"),
+        html.Div([
+            control_group(
+                "Contract",
                 dcc.Dropdown(
                     id="ie-contract",
                     options=[{"value": c, "label": c} for c in CONTRACTS],
                     value="ES",
                     clearable=False,
-                    style={"backgroundColor": "#111827", "border": "1px solid #1e293b"},
+                    className="dash-dropdown",
+                    style=DROPDOWN_STYLE,
                 ),
-            ], md=2),
-
-            dbc.Col([
-                html.Div("Bars", className="form-label-dark"),
+            ),
+            control_group(
+                "Bars",
                 dcc.Slider(
                     id="ie-nbars",
                     min=100, max=800, step=100, value=300,
                     marks={100: "100", 300: "300", 500: "500", 800: "800"},
                     tooltip={"placement": "bottom"},
                 ),
-            ], md=4, style={"paddingTop": "8px"}),
-        ], className="mb-4"),
+            ),
+        ], style={
+            "display": "grid",
+            "gridTemplateColumns": "240px 1fr",
+            "gap": "24px",
+            "maxWidth": "640px",
+            "marginBottom": "24px",
+        }),
 
-        dbc.Row([
-            dbc.Col(html.Div([
-                html.H5("Multi-Panel Indicator Dashboard"),
-                html.P("Price · RSI · MACD · ATR · OBV — all synchronised on the same time axis",
-                       className="chart-subtitle"),
-                dcc.Loading(dcc.Graph(
-                    id="ie-chart",
-                    config={"displayModeBar": True, "displaylogo": False,
-                            "modeBarButtonsToRemove": ["lasso2d", "select2d"]},
-                )),
-            ], className="chart-card"), md=12),
-        ]),
+        section_card(
+            "Multi-Panel Dashboard",
+            "Price · RSI · MACD · ATR · OBV — all aligned on the same time axis",
+            dcc.Loading(dcc.Graph(
+                id="ie-chart",
+                config={
+                    "displayModeBar": True,
+                    "displaylogo": False,
+                    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                },
+            )),
+        ),
     ])
 
 
 @callback(
     Output("ie-chart", "figure"),
     Input("ie-contract", "value"),
-    Input("ie-nbars",    "value"),
+    Input("ie-nbars", "value"),
 )
 def update_ie(contract, n_bars):
     return _full_indicator_dashboard(contract or "ES", n_bars or 300)

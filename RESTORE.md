@@ -57,7 +57,7 @@ git push --tags
 
 ```
 QuantTermProj/
-├── app.py                   ← launch point:  python3 app.py
+├── wsgi.py                  ← launch point:  python3 wsgi.py
 ├── run.sh                   ← one-click launcher
 ├── requirements.txt
 ├── config/
@@ -90,7 +90,7 @@ QuantTermProj/
 pip install -r requirements.txt
 cp .env.example .env          # add API keys (optional)
 python3 -m pytest tests/ -v   # verify: 125 tests pass
-python3 app.py                # launch at http://127.0.0.1:8050
+python3 wsgi.py               # launch at http://127.0.0.1:8050
 ```
 
 ---

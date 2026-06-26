@@ -9,26 +9,33 @@ import plotly.graph_objects as go
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
+from app.components import data_table, metric_tile, page_header, section_card
 from app.theme import COLORS
 from app.data_service import fetch_stock_history
 
 
-# ── Watchlist configuration ───────────────────────────────────────────────────
-
 WATCHLIST = [
-    {"ticker": "TSLA",  "label": "Tesla",      "color": COLORS["blue"]},
-    {"ticker": "GME",   "label": "GameStop",   "color": COLORS["green"]},
-    {"ticker": "AAPL",  "label": "Apple",      "color": COLORS["gold"]},
-    {"ticker": "SPY",   "label": "S&P 500 ETF","color": COLORS["purple"]},
+    {"ticker": "TSLA",  "label": "Tesla",       "color": COLORS["blue"]},
+    {"ticker": "GME",   "label": "GameStop",    "color": COLORS["green"]},
+    {"ticker": "AAPL",  "label": "Apple",       "color": COLORS["gold"]},
+    {"ticker": "SPY",   "label": "S&P 500 ETF", "color": COLORS["purple"]},
 ]
 
 FUTURES_WATCHLIST = [
     {"sym": "ES", "label": "E-mini S&P 500", "price": 5_247.25, "chg": +0.38},
-    {"sym": "NQ", "label": "Nasdaq-100",     "price": 18_432.50,"chg": +0.52},
-    {"sym": "CL", "label": "Crude Oil (WTI)","price": 78.42,    "chg": -0.17},
+    {"sym": "NQ", "label": "Nasdaq-100",     "price": 18_432.50, "chg": +0.52},
+    {"sym": "CL", "label": "Crude Oil (WTI)", "price": 78.42,    "chg": -0.17},
     {"sym": "GC", "label": "Gold",           "price": 2_341.80, "chg": +0.21},
     {"sym": "ZN", "label": "10-Yr T-Note",   "price": 109.28,   "chg": -0.04},
 ]
+
+
+SPARKLINE_FILL = {
+    COLORS["blue"]:   "rgba(0, 113, 227, 0.08)",
+    COLORS["green"]:  "rgba(52, 199, 89, 0.08)",
+    COLORS["gold"]:   "rgba(255, 159, 10, 0.08)",
+    COLORS["purple"]: "rgba(175, 82, 222, 0.08)",
+}
 
 
 def _mini_sparkline(ticker: str, color: str) -> go.Figure:
@@ -37,9 +44,9 @@ def _mini_sparkline(ticker: str, color: str) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=df["Date"], y=df["Close"],
         mode="lines",
-        line=dict(color=color, width=1.5),
+        line=dict(color=color, width=2),
         fill="tozeroy",
-        fillcolor=color.replace(")", ", 0.08)").replace("rgb", "rgba"),
+        fillcolor=SPARKLINE_FILL.get(color, "rgba(0,0,0,0.05)"),
         hoverinfo="skip",
     ))
     fig.update_layout(
@@ -48,14 +55,13 @@ def _mini_sparkline(ticker: str, color: str) -> go.Figure:
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        height=60,
+        height=56,
         showlegend=False,
     )
     return fig
 
 
 def _market_overview_chart() -> go.Figure:
-    """Multi-line normalised performance of watchlist tickers (YTD)."""
     fig = go.Figure()
     for item in WATCHLIST:
         df = fetch_stock_history(item["ticker"], period="1y")
@@ -67,11 +73,11 @@ def _market_overview_chart() -> go.Figure:
             x=df["Date"], y=norm,
             name=item["label"],
             mode="lines",
-            line=dict(color=item["color"], width=1.8),
+            line=dict(color=item["color"], width=2),
             hovertemplate=f"<b>{item['label']}</b><br>%{{y:+.2f}}%<extra></extra>",
         ))
     fig.update_layout(
-        title="1-Year Normalised Performance (%)",
+        title="",
         height=320,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         yaxis_ticksuffix="%",
@@ -81,7 +87,6 @@ def _market_overview_chart() -> go.Figure:
 
 
 def _futures_heatmap() -> go.Figure:
-    """Simulated intraday futures heatmap (% change)."""
     labels = [f["label"] for f in FUTURES_WATCHLIST]
     changes = [f["chg"] for f in FUTURES_WATCHLIST]
     colors = [COLORS["green"] if c >= 0 else COLORS["red"] for c in changes]
@@ -94,19 +99,16 @@ def _futures_heatmap() -> go.Figure:
         hovertemplate="<b>%{x}</b><br>Change: %{y:+.2f}%<extra></extra>",
     ))
     fig.update_layout(
-        title="Futures Daily Change (%)",
-        height=240,
+        title="",
+        height=260,
         yaxis_ticksuffix="%",
         showlegend=False,
-        bargap=0.3,
+        bargap=0.35,
     )
     return fig
 
 
-# ── Layout ────────────────────────────────────────────────────────────────────
-
 def layout() -> html.Div:
-    # Compute live-style stats for watchlist cards
     cards = []
     for item in WATCHLIST:
         df = fetch_stock_history(item["ticker"], period="5d")
@@ -114,91 +116,79 @@ def layout() -> html.Div:
             price, chg, pct = 0, 0, 0
         else:
             price = df["Close"].iloc[-1]
-            prev  = df["Close"].iloc[-2]
-            chg   = price - prev
-            pct   = chg / prev * 100
+            prev = df["Close"].iloc[-2]
+            chg = price - prev
+            pct = chg / prev * 100
 
         sign_cls = "positive" if chg >= 0 else "negative"
-        arrow    = "▲" if chg >= 0 else "▼"
+        arrow = "▲" if chg >= 0 else "▼"
 
         cards.append(
-            dbc.Col(
-                html.Div([
-                    html.Div(item["label"], className="metric-label"),
-                    html.Div(item["ticker"], style={"color": item["color"], "fontSize": "0.7rem", "marginBottom": "4px"}),
-                    html.Div(f"${price:,.2f}", className=f"metric-value {sign_cls}"),
-                    html.Div(f"{arrow} ${abs(chg):.2f}  ({pct:+.2f}%)", className=f"metric-delta {sign_cls}"),
-                    html.Div(style={"height": "8px"}),
-                    dcc.Graph(
-                        figure=_mini_sparkline(item["ticker"], item["color"]),
-                        config={"displayModeBar": False},
-                        style={"height": "60px"},
-                    ),
-                ], className="metric-card"),
-                md=3, sm=6, className="mb-3",
-            )
+            html.Div([
+                metric_tile(
+                    item["label"],
+                    f"${price:,.2f}",
+                    delta=f"{arrow} ${abs(chg):.2f} ({pct:+.2f}%)",
+                    delta_cls=sign_cls,
+                    accent=item["ticker"],
+                ),
+                dcc.Graph(
+                    figure=_mini_sparkline(item["ticker"], item["color"]),
+                    config={"displayModeBar": False},
+                    style={"height": "56px", "marginTop": "8px"},
+                ),
+            ], className="metric-tile", style={"borderTop": f"3px solid {item['color']}"})
         )
 
-    # Futures table rows
     fut_rows = []
     for f in FUTURES_WATCHLIST:
         color = COLORS["green"] if f["chg"] >= 0 else COLORS["red"]
         arrow = "▲" if f["chg"] >= 0 else "▼"
         fut_rows.append(html.Tr([
             html.Td(html.Span(f["sym"], className="tag tag-blue")),
-            html.Td(f["label"], style={"color": "#94a3b8"}),
+            html.Td(f["label"], style={"color": "#6e6e73"}),
             html.Td(f"${f['price']:,.2f}", style={"fontWeight": "600"}),
             html.Td(f"{arrow} {abs(f['chg']):.2f}%", style={"color": color, "fontWeight": "600"}),
         ]))
 
     return html.Div([
-        # Header
+        page_header(
+            "Market Overview",
+            "Watch live-style quotes, compare performance, and monitor key futures contracts.",
+            badge="Today",
+        ),
+
+        html.Div(cards, className="metrics-grid"),
+
         html.Div([
-            html.H2("Market Overview"),
-            html.P("Real-time watchlist, futures snapshot, and portfolio summary"),
-        ], className="page-header"),
-
-        # KPI cards row
-        dbc.Row(cards, className="mb-2"),
-
-        # Charts row
-        dbc.Row([
-            dbc.Col(html.Div([
-                html.H5("Portfolio Performance"),
-                html.P("1-year normalised return comparison", className="chart-subtitle"),
+            section_card(
+                "Portfolio Performance",
+                "One-year normalised return comparison across your watchlist",
                 dcc.Graph(
                     id="dashboard-perf-chart",
                     figure=_market_overview_chart(),
                     config={"displayModeBar": False},
                 ),
-            ], className="chart-card"), md=8),
-
-            dbc.Col(html.Div([
-                html.H5("Futures Snapshot"),
-                html.P("Daily % change across key contracts", className="chart-subtitle"),
+            ),
+            section_card(
+                "Futures Snapshot",
+                "Daily percentage change across major contracts",
                 dcc.Graph(
                     id="dashboard-futures-bar",
                     figure=_futures_heatmap(),
                     config={"displayModeBar": False},
                 ),
-            ], className="chart-card"), md=4),
-        ]),
+            ),
+        ], className="charts-grid-2-1"),
 
-        # Futures table
-        dbc.Row([
-            dbc.Col(html.Div([
-                html.H5("CME Futures Watchlist"),
-                html.P("Key contract prices — paper / simulation mode", className="chart-subtitle"),
-                html.Table([
-                    html.Thead(html.Tr([
-                        html.Th("Symbol"), html.Th("Contract"),
-                        html.Th("Last Price"), html.Th("Day Chg"),
-                    ], style={"color": "#64748b", "fontSize": "0.7rem", "textTransform": "uppercase"})),
-                    html.Tbody(fut_rows),
-                ], style={"width": "100%", "borderCollapse": "collapse", "fontSize": "0.85rem"}),
-            ], className="chart-card"), md=12),
-        ]),
+        section_card(
+            "CME Futures Watchlist",
+            "Key contract prices — paper trading simulation",
+            data_table(
+                ["Symbol", "Contract", "Last Price", "Day Change"],
+                fut_rows,
+            ),
+        ),
 
-        # Auto-refresh interval (every 60s for demo)
         dcc.Interval(id="dashboard-interval", interval=60_000, n_intervals=0),
     ])

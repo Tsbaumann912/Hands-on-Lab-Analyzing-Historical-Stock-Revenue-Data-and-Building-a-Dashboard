@@ -1,71 +1,55 @@
 """
-Root application layout: sidebar navigation + dynamic page content.
+Root application layout — Apple-inspired top navigation and content shell.
 """
 
 from __future__ import annotations
 
 from dash import dcc, html
 
+from app.components import status_pill
+
 
 NAV_ITEMS = [
-    {"id": "nav-dashboard",    "label": "Dashboard",          "icon": "📊", "page": "/"},
-    {"id": "nav-stock",        "label": "Stock Research",     "icon": "📈", "page": "/stock"},
-    {"id": "nav-futures",      "label": "Futures Terminal",   "icon": "⚡", "page": "/futures"},
-    {"id": "nav-indicators",   "label": "Indicator Explorer", "icon": "🔬", "page": "/indicators"},
-    {"id": "nav-strategy-lab", "label": "Strategy Lab",       "icon": "🧪", "page": "/strategy-lab"},
-    {"id": "nav-risk",         "label": "Risk Console",       "icon": "🛡️", "page": "/risk"},
+    {"id": "nav-dashboard",    "label": "Overview",    "page": "/"},
+    {"id": "nav-stock",        "label": "Stocks",      "page": "/stock"},
+    {"id": "nav-futures",      "label": "Futures",     "page": "/futures"},
+    {"id": "nav-indicators",   "label": "Indicators",  "page": "/indicators"},
+    {"id": "nav-strategy-lab", "label": "Strategies",  "page": "/strategy-lab"},
+    {"id": "nav-risk",         "label": "Risk",        "page": "/risk"},
 ]
 
 
-def sidebar() -> html.Div:
-    nav_links = []
-    for item in NAV_ITEMS:
-        nav_links.append(
-            html.Div(
-                [
-                    html.Span(item["icon"], style={"fontSize": "0.95rem"}),
-                    html.Span(item["label"]),
-                ],
-                id=item["id"],
-                className="nav-link-custom",
-                n_clicks=0,
-            )
-        )
+def top_nav() -> html.Nav:
+    nav_links = [
+        html.Div(item["label"], id=item["id"], className="nav-link-custom", n_clicks=0)
+        for item in NAV_ITEMS
+    ]
 
-    return html.Div([
-        # Brand
-        html.Div([
-            html.H4("⚙ QuantTerminal"),
-            html.Small("FUTURES · RESEARCH · RISK"),
-        ], className="sidebar-brand"),
-
-        # Navigation
-        html.Div("RESEARCH", className="nav-section-label"),
-        nav_links[0],  # Dashboard
-        nav_links[1],  # Stock Research
-
-        html.Div("TRADING", className="nav-section-label"),
-        nav_links[2],  # Futures Terminal
-        nav_links[3],  # Indicator Explorer
-        nav_links[4],  # Strategy Lab
-
-        html.Div("MANAGEMENT", className="nav-section-label"),
-        nav_links[5],  # Risk Console
-
-        # Status footer
+    return html.Nav([
         html.Div([
             html.Div([
-                html.Span(className="status-dot paper"),
-                html.Span("Paper Trading", style={"color": "#94a3b8", "fontSize": "0.75rem"}),
-            ]),
-            html.Div("v1.0.0", style={"color": "#334155", "fontSize": "0.65rem", "marginTop": "4px"}),
-        ], className="sidebar-status"),
-    ], id="sidebar")
+                html.Span("Q", className="brand-icon"),
+                html.Span("QuantTerminal"),
+            ], className="brand-link"),
+
+            html.Div(nav_links, className="nav-links"),
+
+            html.Div([
+                status_pill("Paper Trading", "paper"),
+            ], className="nav-status"),
+        ], className="top-nav-inner"),
+    ], className="top-nav", id="top-nav")
 
 
 def root_layout() -> html.Div:
     return html.Div([
         dcc.Location(id="url", refresh=False),
-        sidebar(),
-        html.Div(id="page-content", className="", children=[], style={"marginLeft": "220px", "padding": "24px", "minHeight": "100vh", "backgroundColor": "#0a0e1a"}),
+        html.Div([
+            top_nav(),
+            html.Main(id="page-content", children=[]),
+            html.Footer(
+                "QuantTerminal · Futures & Research · Simulation mode",
+                className="app-footer",
+            ),
+        ], className="app-shell"),
     ])

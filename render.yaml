@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: quantterminal
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: gunicorn wsgi:server --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: WEB_CONCURRENCY
+        value: "2"

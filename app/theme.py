@@ -1,58 +1,67 @@
-"""Shared Plotly chart theme for the dark terminal aesthetic."""
+"""Shared Plotly chart theme — Apple-inspired light aesthetic."""
 
 from __future__ import annotations
 
+import plotly.graph_objects as go
+import plotly.io as pio
+
 CHART_TEMPLATE = {
     "layout": {
-        "paper_bgcolor": "#111827",
-        "plot_bgcolor": "#111827",
-        "font": {"color": "#f1f5f9", "family": "Inter, Segoe UI, system-ui, sans-serif", "size": 12},
-        "title": {"font": {"color": "#f1f5f9", "size": 14, "family": "Inter, sans-serif"}},
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {
+            "color": "#1d1d1f",
+            "family": '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif',
+            "size": 13,
+        },
+        "title": {
+            "font": {
+                "color": "#1d1d1f",
+                "size": 17,
+                "family": '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            }
+        },
         "xaxis": {
-            "gridcolor": "#1e293b",
-            "linecolor": "#1e293b",
-            "tickcolor": "#64748b",
-            "tickfont": {"color": "#64748b", "size": 11},
-            "zerolinecolor": "#1e293b",
+            "gridcolor": "rgba(0,0,0,0.06)",
+            "linecolor": "rgba(0,0,0,0.08)",
+            "tickcolor": "#86868b",
+            "tickfont": {"color": "#6e6e73", "size": 11},
+            "zerolinecolor": "rgba(0,0,0,0.06)",
         },
         "yaxis": {
-            "gridcolor": "#1e293b",
-            "linecolor": "#1e293b",
-            "tickcolor": "#64748b",
-            "tickfont": {"color": "#64748b", "size": 11},
-            "zerolinecolor": "#1e293b",
+            "gridcolor": "rgba(0,0,0,0.06)",
+            "linecolor": "rgba(0,0,0,0.08)",
+            "tickcolor": "#86868b",
+            "tickfont": {"color": "#6e6e73", "size": 11},
+            "zerolinecolor": "rgba(0,0,0,0.06)",
         },
         "legend": {
-            "bgcolor": "rgba(17,24,39,0.8)",
-            "bordercolor": "#1e293b",
+            "bgcolor": "rgba(255,255,255,0.9)",
+            "bordercolor": "rgba(0,0,0,0.08)",
             "borderwidth": 1,
-            "font": {"color": "#94a3b8", "size": 11},
+            "font": {"color": "#6e6e73", "size": 12},
         },
-        "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
+        "margin": {"l": 48, "r": 16, "t": 48, "b": 40},
         "hoverlabel": {
-            "bgcolor": "#0d1117",
-            "bordercolor": "#3b82f6",
-            "font": {"color": "#f1f5f9"},
+            "bgcolor": "#ffffff",
+            "bordercolor": "#0071e3",
+            "font": {"color": "#1d1d1f", "family": '-apple-system, BlinkMacSystemFont, sans-serif'},
         },
     }
 }
 
 COLORS = {
-    "blue":   "#3b82f6",
-    "green":  "#10b981",
-    "red":    "#ef4444",
-    "gold":   "#f59e0b",
-    "purple": "#8b5cf6",
-    "cyan":   "#06b6d4",
-    "orange": "#f97316",
-    "pink":   "#ec4899",
-    "muted":  "#64748b",
-    "text":   "#f1f5f9",
+    "blue":   "#0071e3",
+    "green":  "#34c759",
+    "red":    "#ff3b30",
+    "gold":   "#ff9f0a",
+    "purple": "#af52de",
+    "cyan":   "#5ac8fa",
+    "orange": "#ff9500",
+    "pink":   "#ff2d55",
+    "muted":  "#86868b",
+    "text":   "#1d1d1f",
 }
 
-import plotly.graph_objects as go
-import plotly.io as pio
-
-# Register as a named template so all charts can use it
-pio.templates["quant_dark"] = go.layout.Template(**CHART_TEMPLATE)
-pio.templates.default = "quant_dark"
+pio.templates["quant_apple"] = go.layout.Template(**CHART_TEMPLATE)
+pio.templates.default = "quant_apple"
