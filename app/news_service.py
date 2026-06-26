@@ -474,9 +474,14 @@ def _compute_fundamentals(df: pd.DataFrame) -> Fundamentals:
     if log_ret.size > 1:
         f.annual_volatility_pct = round(float(np.std(log_ret, ddof=1) * math.sqrt(tdays) * 100.0), 2)
 
-    # Maximum drawdown over the full sample (vectorised).
-    running_max = np.maximum.accumulate(close.to_numpy())
-    drawdown = close.to_numpy() / running_max - 1.0
+    # Maximum drawdown over the full sample (vectorised). Guard against the
+    # ratio formula breaking on the April-2020 negative WTI print: a long-only
+    # price drawdown is floored at -100%.
+    px = close.to_numpy()
+    running_max = np.maximum.accumulate(px)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        drawdown = np.where(running_max > 0, px / running_max - 1.0, 0.0)
+    drawdown = np.clip(drawdown, -1.0, 0.0)
     f.max_drawdown_pct = round(float(drawdown.min()) * 100.0, 2)
 
     # Period returns.
