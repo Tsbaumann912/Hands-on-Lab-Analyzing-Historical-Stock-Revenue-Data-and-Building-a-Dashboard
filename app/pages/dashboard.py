@@ -6,12 +6,16 @@ watchlist, and quick-access metrics.
 from __future__ import annotations
 
 import plotly.graph_objects as go
-from dash import dcc, html
+from dash import Input, Output, callback, dcc, html
 import dash_bootstrap_components as dbc
 
 from app.components import data_table, metric_tile, page_header, section_card
 from app.theme import COLORS
-from app.data_service import fetch_stock_history
+from app.data_service import (
+    FUTURES_ASSET_CONFIG,
+    fetch_all_futures_market_intelligence,
+    fetch_stock_history,
+)
 
 
 WATCHLIST = [
@@ -108,6 +112,33 @@ def _futures_heatmap() -> go.Figure:
     return fig
 
 
+def _sentiment_timeseries_chart(series: list[dict]) -> go.Figure:
+    data = series[-24:] if series else []
+    x_vals = [point["month"] for point in data]
+    y_vals = [point["score"] for point in data]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x_vals,
+        y=y_vals,
+        mode="lines+markers",
+        line=dict(color=COLORS["blue"], width=2),
+        marker=dict(size=6),
+        fill="tozeroy",
+        fillcolor="rgba(0, 113, 227, 0.06)",
+        hovertemplate="<b>%{x}</b><br>Score: %{y:.2f}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="",
+        height=200,
+        margin=dict(l=10, r=10, t=8, b=24),
+        yaxis=dict(range=[-1.05, 1.05], zeroline=True, zerolinecolor="#d2d2d7"),
+        xaxis=dict(showgrid=False),
+        showlegend=False,
+    )
+    return fig
+
+
 def layout() -> html.Div:
     cards = []
     for item in WATCHLIST:
@@ -190,5 +221,100 @@ def layout() -> html.Div:
             ),
         ),
 
+        section_card(
+            "Futures Intelligence Feed",
+            "Live headlines, fundamentals, and sentiment history (2000 → present) by contract.",
+            html.Div([
+                dcc.Tabs(
+                    id="overview-futures-intel-tabs",
+                    value="GC",
+                    children=[
+                        dcc.Tab(
+                            label=f"{sym} — {FUTURES_ASSET_CONFIG[sym]['name']}",
+                            value=sym,
+                        )
+                        for sym in FUTURES_ASSET_CONFIG
+                    ],
+                ),
+                dcc.Loading(
+                    html.Div(id="overview-futures-intel-body", style={"marginTop": "16px"}),
+                    type="dot",
+                ),
+            ]),
+        ),
+
         dcc.Interval(id="dashboard-interval", interval=60_000, n_intervals=0),
+        dcc.Interval(id="overview-futures-intel-refresh", interval=180_000, n_intervals=0),
+    ])
+
+
+@callback(
+    Output("overview-futures-intel-body", "children"),
+    Input("overview-futures-intel-tabs", "value"),
+    Input("overview-futures-intel-refresh", "n_intervals"),
+)
+def render_futures_intelligence(symbol: str, n_intervals: int):
+    payload = fetch_all_futures_market_intelligence(
+        start_year=2000,
+        force_refresh=(n_intervals == 0),
+    )
+    selected = payload["assets"].get(symbol, payload["assets"]["GC"])
+
+    fundamentals = selected.get("fundamentals", {})
+    sentiment = selected.get("sentiment", {})
+    headlines = selected.get("news_headlines", [])
+
+    fundamental_tiles = [
+        ("Current Close", f"{fundamentals.get('current_close', 0.0):,.2f}", "neutral"),
+        ("Since 2000", f"{fundamentals.get('price_change_since_2000_pct', 0.0):+.2f}%", "neutral"),
+        ("Annualized Return", f"{fundamentals.get('annualized_return_pct', 0.0):+.2f}%", "positive"),
+        ("Annualized Volatility", f"{fundamentals.get('annualized_volatility_pct', 0.0):.2f}%", "negative"),
+    ]
+
+    headline_rows = [
+        html.Li([
+            html.A(
+                headline.get("title", "Untitled headline"),
+                href=headline.get("url") or "#",
+                target="_blank",
+                rel="noopener noreferrer",
+                style={"fontWeight": "600"},
+            ),
+            html.Div(
+                f"{headline.get('source', 'Feed')} · "
+                f"{headline.get('published_at', '')[:10]} · "
+                f"{headline.get('sentiment_label', 'neutral').title()}",
+                style={"fontSize": "12px", "color": "#8e8e93", "marginTop": "4px"},
+            ),
+        ], style={"marginBottom": "12px"})
+        for headline in headlines[:12]
+    ]
+
+    composite = float(sentiment.get("current_composite_score", 0.0))
+    composite_cls = "positive" if composite > 0.2 else ("negative" if composite < -0.2 else "neutral")
+
+    return html.Div([
+        html.Div([
+            html.Div(metric_tile(label, value, value_cls=value_cls), className="metric-tile")
+            for label, value, value_cls in fundamental_tiles
+        ], className="metrics-grid"),
+        html.Div([
+            html.Div([
+                html.H4("Latest Headlines", style={"marginBottom": "10px"}),
+                html.Ul(headline_rows, style={"paddingLeft": "18px", "margin": 0}),
+            ], style={"padding": "6px 0"}),
+            html.Div([
+                html.H4("Sentiment (2000 → Current)", style={"marginBottom": "10px"}),
+                html.Div(metric_tile(
+                    "Composite Sentiment",
+                    sentiment.get("current_composite_label", "neutral").title(),
+                    delta=f"{composite:+.2f}",
+                    delta_cls=composite_cls,
+                ), className="metric-tile", style={"marginBottom": "10px"}),
+                dcc.Graph(
+                    figure=_sentiment_timeseries_chart(sentiment.get("series_from_2000", [])),
+                    config={"displayModeBar": False},
+                ),
+            ]),
+        ], className="charts-grid-2-1"),
     ])
