@@ -26,6 +26,7 @@ import dash_bootstrap_components as dbc
 import app.theme  # noqa: F401
 
 from app.layout import root_layout, NAV_ITEMS
+from app.api.market_intelligence_routes import market_intel_bp
 
 # Import page modules (they register their own callbacks via @callback)
 from app.pages import (
@@ -56,6 +57,8 @@ application = dash.Dash(
 )
 
 server = application.server   # expose Flask server for production deployment
+
+server.register_blueprint(market_intel_bp)
 
 
 @server.route("/health")
