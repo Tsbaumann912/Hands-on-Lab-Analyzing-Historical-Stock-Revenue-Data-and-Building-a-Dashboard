@@ -71,3 +71,41 @@ backtest:
     - sortino
     - max_drawdown
     - calmar
+
+market_intelligence:
+  history_start: "2000-01-01"
+  cache_ttl_seconds: 300
+  news_limit: 25
+  assets:
+    - symbol: ES
+      label: E-mini S&P 500
+      yfinance_ticker: ES=F
+      color: "#0071e3"
+    - symbol: NQ
+      label: Nasdaq-100
+      yfinance_ticker: NQ=F
+      color: "#af52de"
+    - symbol: CL
+      label: Crude Oil (WTI)
+      yfinance_ticker: CL=F
+      color: "#ff3b30"
+    - symbol: GC
+      label: Gold
+      yfinance_ticker: GC=F
+      color: "#ff9f0a"
+    - symbol: ZN
+      label: 10-Year T-Note
+      yfinance_ticker: ZN=F
+      color: "#34c759"
+    - symbol: ZB
+      label: 30-Year T-Bond
+      yfinance_ticker: ZB=F
+      color: "#5ac8fa"
+    - symbol: SI
+      label: Silver
+      yfinance_ticker: SI=F
+      color: "#86868b"
+    - symbol: NG
+      label: Natural Gas
+      yfinance_ticker: NG=F
+      color: "#ff9500"
