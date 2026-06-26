@@ -25,29 +25,41 @@ futures-terminal/
 ## Quick Start
 
 ```bash
-# 1. Clone and install dependencies
+# 1. Install all dependencies
 pip install -r requirements.txt
 
-# 2. Configure credentials
+# 2. Launch the desktop application (browser opens automatically)
+python3 app.py
+# OR
+./run.sh
+
+# The app opens at: http://127.0.0.1:8050
+```
+
+### Desktop Application Pages
+
+| Page | Description |
+|------|-------------|
+| **Dashboard** | Market overview, watchlist KPI cards, 1-year normalised performance chart, CME futures snapshot |
+| **Stock Research** | Interactive OHLCV candlestick + EMA overlays; quarterly revenue vs share price dual-panel chart (from the Final Assignment notebook) for TSLA, GME, and any ticker |
+| **Futures Terminal** | CME contract price chart with full overlay suite (SMA/EMA/BB/VWAP) + sub-panel indicators (RSI/MACD/ATR/OBV) |
+| **Indicator Explorer** | 5-panel synchronised chart: Price+BB+EMA → RSI → MACD → ATR → OBV |
+| **Strategy Lab** | Configure strategy parameters with sliders, run backtests, view equity curve + fills table + all performance metrics |
+| **Risk Console** | Drawdown speedometer gauge, risk-limit utilisation bars, equity history, open positions table |
+
+### Credentials (optional)
+
+```bash
 cp .env.example .env
-# Edit .env with your Databento + Alpaca API keys
+# Add DATABENTO_API_KEY, ALPACA_API_KEY for live data
+# App works fully with synthetic data if keys are absent
+```
 
-# 3. Run the full test suite
+### Running Tests
+
+```bash
 python3 -m pytest tests/ -v
-
-# 4. Run a backtest (example)
-python3 -c "
-from core.config import Config
-from engine.backtest import BacktestEngine
-from strategies.mean_reversion import MeanReversionRSI
-from tests.conftest import make_bars
-
-config = Config.from_yaml('config/default.yaml')
-engine = BacktestEngine(config, MeanReversionRSI)
-bars = make_bars(n=500)   # replace with real data
-result = engine.run({'ES.c.0': bars})
-print(result.summary())
-"
+# 125 tests, all pass
 ```
 
 ## Modules

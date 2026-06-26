@@ -1,0 +1,286 @@
+/* ── Quant Terminal — Custom Styles ───────────────────────────────────────── */
+
+:root {
+  --bg-dark:      #0a0e1a;
+  --bg-card:      #111827;
+  --bg-sidebar:   #0d1117;
+  --accent-blue:  #3b82f6;
+  --accent-green: #10b981;
+  --accent-red:   #ef4444;
+  --accent-gold:  #f59e0b;
+  --accent-purple:#8b5cf6;
+  --text-primary: #f1f5f9;
+  --text-muted:   #64748b;
+  --border:       #1e293b;
+}
+
+body {
+  background-color: var(--bg-dark) !important;
+  color: var(--text-primary) !important;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 220px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  z-index: 1000;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+#main-content {
+  margin-left: 220px;
+  padding: 24px;
+  min-height: 100vh;
+  background: var(--bg-dark);
+}
+
+/* ── Logo / Brand ────────────────────────────────────────────────────────── */
+.sidebar-brand {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-brand h4 {
+  color: var(--accent-blue) !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.sidebar-brand small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ── Nav Links ───────────────────────────────────────────────────────────── */
+.nav-section-label {
+  color: var(--text-muted) !important;
+  font-size: 0.65rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 16px 16px 4px;
+  font-weight: 600;
+}
+
+.nav-link-custom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  color: #94a3b8 !important;
+  text-decoration: none;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  margin: 2px 8px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: calc(100% - 16px);
+}
+
+.nav-link-custom:hover {
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--text-primary) !important;
+}
+
+.nav-link-custom.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue) !important;
+  font-weight: 600;
+  border-left: 3px solid var(--accent-blue);
+  padding-left: 13px;
+}
+
+/* ── Status badge in sidebar ─────────────────────────────────────────────── */
+.sidebar-status {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.status-dot.live  { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+.status-dot.paper { background: var(--accent-gold);  box-shadow: 0 0 6px var(--accent-gold); }
+.status-dot.off   { background: var(--text-muted); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  transition: border-color 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: #2d3f55;
+}
+
+.metric-card .metric-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+
+.metric-card .metric-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.metric-card .metric-delta {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.metric-value.positive { color: var(--accent-green); }
+.metric-value.negative { color: var(--accent-red); }
+.metric-value.neutral  { color: var(--text-primary); }
+.metric-delta.positive { color: var(--accent-green); }
+.metric-delta.negative { color: var(--accent-red); }
+
+/* ── Chart containers ────────────────────────────────────────────────────── */
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-card h5 {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.chart-card .chart-subtitle {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-bottom: 16px;
+}
+
+/* ── Table styling ───────────────────────────────────────────────────────── */
+.dash-table-container .dash-spreadsheet {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+}
+
+.dash-table-container .dash-spreadsheet td,
+.dash-table-container .dash-spreadsheet th {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+  font-size: 0.8rem;
+}
+
+.dash-table-container .dash-spreadsheet th {
+  font-weight: 600;
+  color: var(--text-muted) !important;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+}
+
+/* ── Form controls ───────────────────────────────────────────────────────── */
+.Select-control, .Select-menu-outer, .VirtualizedSelectOption {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+.Select-value-label { color: var(--text-primary) !important; }
+
+.form-label-dark {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.page-header p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* ── Badge tags ──────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tag-blue   { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+.tag-green  { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); }
+.tag-red    { background: rgba(239, 68, 68, 0.15);  color: var(--accent-red); }
+.tag-gold   { background: rgba(245, 158, 11, 0.15); color: var(--accent-gold); }
+.tag-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: #2d3f55; border-radius: 3px; }
+
+/* ── dcc.Graph plotly charts — dark background ───────────────────────────── */
+.js-plotly-plot .plotly .bg {
+  fill: var(--bg-card) !important;
+}
+
+/* ── Range slider ────────────────────────────────────────────────────────── */
+.rc-slider-track { background-color: var(--accent-blue) !important; }
+.rc-slider-handle { border-color: var(--accent-blue) !important; }
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* ── Loading spinner ─────────────────────────────────────────────────────── */
+._dash-loading-callback {
+  background-color: rgba(10, 14, 26, 0.7) !important;
+}
