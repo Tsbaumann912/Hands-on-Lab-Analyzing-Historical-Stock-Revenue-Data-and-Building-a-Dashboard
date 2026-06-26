@@ -56,6 +56,13 @@ application = dash.Dash(
 )
 
 server = application.server   # expose Flask server for production deployment
+
+
+@server.route("/health")
+def _health():
+    return "ok", 200
+
+
 application.layout = root_layout()
 
 
