@@ -131,7 +131,7 @@ if __name__ == "__main__":
     threading.Thread(target=_open_browser, daemon=True).start()
 
     application.run(
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8050,
         debug=False,
         use_reloader=False,
