@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Credentials
+.env
+*.key
+*.pem
+secrets/
+
+# Large data files
+data/raw/
+data/cache/
+**/*.parquet
+**/*.arrow
+**/*.feather
+**/*.hdf5
+**/*.h5
+**/*.csv.gz
+
+# Logs
+logs/*.log
+*.log
+*.prof
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db

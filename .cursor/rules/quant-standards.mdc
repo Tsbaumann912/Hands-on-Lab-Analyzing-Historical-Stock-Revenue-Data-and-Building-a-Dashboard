@@ -1,0 +1,42 @@
+---
+description: Quantitative engineering standards for the futures trading terminal
+globs:
+  - "**/*.py"
+alwaysApply: true
+---
+
+# Quantitative Engineering Standards
+
+## Type Safety
+- Every function and method **must** carry explicit type hints for all parameters and return values.
+- Use `from __future__ import annotations` at the top of every module.
+- Prefer `dataclasses` or `pydantic` models over raw `dict` for structured data.
+
+## Vectorised Operations — MANDATORY
+- **All** numerical operations must use vectorised NumPy, Polars, or numba routines.
+- **Strictly prohibit** iterative `for` / `while` loops over array elements or DataFrame rows.
+  - Allowed: `for epoch in range(n_epochs)`, `for symbol in symbols` (control-flow, not array iteration).
+  - Forbidden: `for i in range(len(df)):`, `df.iterrows()`, `df.apply(lambda …)` in hot paths.
+- Prefer `np.where`, `np.vectorize` (only for scalar dispatch), or Polars expressions over loops.
+
+## Signal Contracts
+- Strategy `on_bar` methods must **always** return a `Signal` dataclass, never a plain `dict` or `None`.
+- `Signal` must carry: `symbol`, `direction` (enum), `strength` (float 0-1), `timestamp`, and optional `metadata`.
+
+## Configuration — No Magic Numbers
+- Never hardcode parameters (lookback windows, thresholds, etc.).
+- Every tuneable value must live in `config/default.yaml` and be injected via `Config` at construction time.
+- Optuna trials must read search-space bounds from `config/optuna.yaml`.
+
+## Error Handling
+- Indicator functions must return `None` (or `np.nan`-filled arrays) when the warm-up window is not yet satisfied — never raise on insufficient data.
+- All broker / data calls must have explicit `try/except` blocks with structured logging, not bare `print()`.
+
+## Futures-Specific Rules
+- Always account for **continuous contract roll** when stitching historical data; never assume a single contract ticker spans the entire backtest window.
+- Margin and mark-to-market P&L must be computed on **notional value** (price × multiplier × contracts), not on price alone.
+- Transaction costs must include: commission, exchange fee, slippage (half-spread), and financing cost.
+
+## Imports
+- Group imports: stdlib → third-party → internal, separated by blank lines.
+- Never use `import *`.

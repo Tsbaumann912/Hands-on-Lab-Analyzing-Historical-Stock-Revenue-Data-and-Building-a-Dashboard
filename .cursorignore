@@ -1,0 +1,43 @@
+# ── Sensitive credentials ──────────────────────────────────────────────────────
+.env
+.env.*
+*.key
+*.pem
+secrets/
+credentials/
+
+# ── Large financial datasets (never index raw tick / bar dumps) ────────────────
+data/raw/
+data/cache/
+**/*.parquet
+**/*.arrow
+**/*.feather
+**/*.hdf5
+**/*.h5
+**/*.csv.gz
+**/*.zip
+
+# ── Python artefacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── IDE / OS noise ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ── Logs and profiling ────────────────────────────────────────────────────────
+logs/
+*.log
+*.prof
+*.lprof

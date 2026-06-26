@@ -1,0 +1,35 @@
+# ── Futures Trading Terminal — Python Dependencies ────────────────────────────
+# Install: pip install -r requirements.txt
+
+# ── Core numerical stack ──────────────────────────────────────────────────────
+numpy>=1.26.0
+pandas>=2.1.0
+polars>=0.20.0
+pyarrow>=14.0.0
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# ── Market data providers ─────────────────────────────────────────────────────
+databento>=0.35.0
+websockets>=12.0
+
+# ── Technical indicators (optional TA-Lib acceleration) ───────────────────────
+# TA-Lib requires system-level install: brew install ta-lib / apt-get install ta-lib
+# TA-Lib>=0.4.28
+
+# ── Backtesting & optimisation ────────────────────────────────────────────────
+optuna>=3.5.0
+
+# ── Broker execution ──────────────────────────────────────────────────────────
+alpaca-py>=0.20.0
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+
+# ── Code quality ──────────────────────────────────────────────────────────────
+mypy>=1.8.0
+ruff>=0.3.0

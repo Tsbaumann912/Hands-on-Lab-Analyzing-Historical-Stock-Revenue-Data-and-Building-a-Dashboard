@@ -1,0 +1,73 @@
+# ── Futures Trading Terminal — Default Configuration ─────────────────────────
+# All tuneable values live here; never hardcode parameters in source code.
+# Override per-environment with config/live.yaml or config/paper.yaml.
+
+log_level: INFO
+
+data:
+  provider: databento
+  dataset: GLBX.MDP3           # CME Globex MDP3 (ES, NQ, CL, GC, etc.)
+  schema: ohlcv-1m             # 1-minute OHLCV bars
+  symbols:
+    - ES.c.0                   # S&P 500 E-mini continuous front contract
+    - NQ.c.0                   # Nasdaq-100 E-mini continuous front contract
+  start_date: "2022-01-01"
+  end_date: "2024-12-31"
+  cache_dir: data/cache
+  websocket_url: wss://ws.databento.com/v0
+
+indicators:
+  rsi_period: 14
+  bb_period: 20
+  bb_std: 2.0
+  sma_short: 20
+  sma_long: 50
+  atr_period: 14
+  volume_ma_period: 20
+
+strategy:
+  name: MeanReversionRSI
+  rsi_oversold: 30.0
+  rsi_overbought: 70.0
+  entry_z_score: 2.0
+  exit_z_score: 0.5
+  lookback: 50
+  signal_strength_scaling: true
+
+risk:
+  max_daily_drawdown_pct: 0.03    # 3% daily drawdown circuit breaker
+  max_position_size_pct: 0.10     # max 10% equity per trade (notional)
+  max_open_positions: 5
+  default_stop_loss_atr_mult: 2.0
+  default_take_profit_atr_mult: 4.0
+  max_leverage: 10.0
+  halt_on_breach: true
+
+portfolio:
+  initial_cash: 100000.0
+  base_currency: USD
+  commission_per_contract: 2.25   # USD — typical CME all-in rate
+  slippage_ticks: 1
+  tick_size: 0.25                 # ES tick = $0.25
+  tick_value: 12.50               # ES tick value = $12.50
+  contract_multiplier: 50.0       # ES point value = $50 per point
+
+broker:
+  provider: alpaca
+  paper_trading: true
+  alpaca_base_url: https://paper-api.alpaca.markets
+  order_timeout_seconds: 30
+
+backtest:
+  engine: vectorbt
+  start_date: "2022-01-01"
+  end_date: "2024-12-31"
+  walk_forward_windows: 5
+  in_sample_ratio: 0.70
+  optuna_trials: 100
+  optuna_timeout_seconds: 300
+  metrics:
+    - sharpe
+    - sortino
+    - max_drawdown
+    - calmar

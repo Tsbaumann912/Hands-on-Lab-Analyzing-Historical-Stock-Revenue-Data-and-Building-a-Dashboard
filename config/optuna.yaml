@@ -1,0 +1,47 @@
+# ── Optuna Hyperparameter Search Spaces ───────────────────────────────────────
+# Bounds read by WalkForwardOptimizer; do not hardcode in optimizer.py
+
+rsi_period:
+  type: int
+  low: 5
+  high: 30
+
+rsi_oversold:
+  type: float
+  low: 20.0
+  high: 40.0
+
+rsi_overbought:
+  type: float
+  low: 60.0
+  high: 80.0
+
+bb_period:
+  type: int
+  low: 10
+  high: 50
+
+bb_std:
+  type: float
+  low: 1.5
+  high: 3.0
+
+atr_period:
+  type: int
+  low: 7
+  high: 28
+
+lookback:
+  type: int
+  low: 20
+  high: 100
+
+sma_short:
+  type: int
+  low: 5
+  high: 30
+
+sma_long:
+  type: int
+  low: 30
+  high: 200
