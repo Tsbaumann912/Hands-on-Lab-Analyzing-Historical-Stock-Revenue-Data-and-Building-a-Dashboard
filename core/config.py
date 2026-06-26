@@ -81,17 +81,6 @@ class BrokerConfig:
 
 
 @dataclass
-class NewsConfig:
-    history_start: str = "2000-01-01"
-    max_headlines: int = 25
-    news_ttl_seconds: int = 300
-    fundamentals_ttl_seconds: int = 3600
-    sentiment_positive_threshold: float = 0.05
-    sentiment_negative_threshold: float = -0.05
-    trading_days_per_year: int = 252
-
-
-@dataclass
 class BacktestConfig:
     engine: str = "vectorbt"
     start_date: str = "2022-01-01"
@@ -106,6 +95,22 @@ class BacktestConfig:
 
 
 @dataclass
+class MarketIntelligenceAssetConfig:
+    symbol: str
+    label: str
+    yfinance_ticker: str
+    color: str = "#0071e3"
+
+
+@dataclass
+class MarketIntelligenceConfig:
+    history_start: str = "2000-01-01"
+    cache_ttl_seconds: int = 300
+    news_limit: int = 25
+    assets: List[MarketIntelligenceAssetConfig] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
     indicators: IndicatorConfig = field(default_factory=IndicatorConfig)
@@ -114,10 +119,27 @@ class Config:
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
-    news: NewsConfig = field(default_factory=NewsConfig)
+    market_intelligence: MarketIntelligenceConfig = field(
+        default_factory=MarketIntelligenceConfig
+    )
     log_level: str = "INFO"
 
     # ── Factory methods ───────────────────────────────────────────────────────
+
+    @classmethod
+    def _parse_market_intelligence(cls, raw: Dict[str, Any]) -> MarketIntelligenceConfig:
+        mi_raw = raw.get("market_intelligence", {})
+        assets_raw = mi_raw.get("assets", [])
+        assets = [
+            MarketIntelligenceAssetConfig(**asset)
+            for asset in assets_raw
+        ]
+        return MarketIntelligenceConfig(
+            history_start=mi_raw.get("history_start", "2000-01-01"),
+            cache_ttl_seconds=mi_raw.get("cache_ttl_seconds", 300),
+            news_limit=mi_raw.get("news_limit", 25),
+            assets=assets,
+        )
 
     @classmethod
     def from_yaml(cls, path: str | Path = "config/default.yaml") -> "Config":
@@ -137,7 +159,7 @@ class Config:
             portfolio=PortfolioConfig(**raw.get("portfolio", {})),
             broker=BrokerConfig(**raw.get("broker", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
-            news=NewsConfig(**raw.get("news", {})),
+            market_intelligence=cls._parse_market_intelligence(raw),
             log_level=raw.get("log_level", "INFO"),
         )
 

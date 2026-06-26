@@ -36,6 +36,8 @@ dash-bootstrap-components>=1.6.0
 yfinance>=0.2.38
 beautifulsoup4>=4.12.0
 requests>=2.31.0
+vaderSentiment>=3.3.2
+feedparser>=6.0.0
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 mypy>=1.8.0

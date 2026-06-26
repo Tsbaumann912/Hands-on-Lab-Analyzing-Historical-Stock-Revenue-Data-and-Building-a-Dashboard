@@ -7,12 +7,15 @@ All methods are cached for the session to avoid redundant API calls.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Dict
+from email.utils import parsedate_to_datetime
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,37 @@ try:
     HAS_YF = True
 except ImportError:
     HAS_YF = False
+
+
+FUTURES_ASSET_CONFIG: Dict[str, Dict[str, str]] = {
+    "ES": {"name": "E-mini S&P 500", "yahoo_symbol": "ES=F"},
+    "NQ": {"name": "E-mini Nasdaq-100", "yahoo_symbol": "NQ=F"},
+    "CL": {"name": "Crude Oil WTI", "yahoo_symbol": "CL=F"},
+    "GC": {"name": "Gold", "yahoo_symbol": "GC=F"},
+    "ZN": {"name": "10-Year T-Note", "yahoo_symbol": "ZN=F"},
+    "ZB": {"name": "30-Year T-Bond", "yahoo_symbol": "ZB=F"},
+    "SI": {"name": "Silver", "yahoo_symbol": "SI=F"},
+    "NG": {"name": "Natural Gas", "yahoo_symbol": "NG=F"},
+}
+
+_POSITIVE_SENTIMENT_TOKENS = {
+    "beat", "bullish", "gain", "growth", "improve", "optimistic",
+    "rally", "rise", "strong", "surge", "upside", "record",
+}
+_NEGATIVE_SENTIMENT_TOKENS = {
+    "bearish", "cut", "decline", "drop", "fall", "inflation",
+    "loss", "miss", "risk", "selloff", "slowdown", "weak",
+}
+
+
+@dataclass(frozen=True)
+class HeadlineRecord:
+    title: str
+    published_at: str
+    source: str
+    url: str
+    sentiment_score: float
+    sentiment_label: str
 
 
 # ── Stock data (yfinance) ─────────────────────────────────────────────────────
@@ -67,6 +101,239 @@ def fetch_revenue_data(ticker: str) -> pd.DataFrame:
     except Exception:
         logger.warning("Revenue fetch failed for %s; using synthetic data.", ticker)
         return _synthetic_revenue(ticker)
+
+
+# ── Futures market intelligence API data ──────────────────────────────────────
+
+def clear_futures_intelligence_cache() -> None:
+    """Clear cached futures intelligence payloads."""
+    _fetch_futures_asset_intelligence_cached.cache_clear()
+
+
+def fetch_all_futures_market_intelligence(
+    start_year: int = 2000,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """
+    Return intelligence payload for all supported futures assets.
+    """
+    assets: Dict[str, Dict[str, Any]] = {}
+    for symbol in FUTURES_ASSET_CONFIG:
+        assets[symbol] = fetch_futures_asset_intelligence(
+            symbol,
+            start_year=start_year,
+            force_refresh=force_refresh,
+        )
+
+    return {
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "start_year": start_year,
+        "assets": assets,
+    }
+
+
+def fetch_futures_asset_intelligence(
+    symbol: str,
+    start_year: int = 2000,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """
+    Return futures intelligence payload for one asset symbol.
+    """
+    key = (symbol or "GC").upper()
+    if key not in FUTURES_ASSET_CONFIG:
+        key = "GC"
+
+    if force_refresh:
+        _fetch_futures_asset_intelligence_cached.cache_clear()
+
+    return _fetch_futures_asset_intelligence_cached(key, start_year)
+
+
+@lru_cache(maxsize=32)
+def _fetch_futures_asset_intelligence_cached(
+    symbol: str,
+    start_year: int,
+) -> Dict[str, Any]:
+    config = FUTURES_ASSET_CONFIG[symbol]
+    history = _download_futures_history(config["yahoo_symbol"], start_year)
+    history = history.sort_values("Date").reset_index(drop=True)
+    history = history.dropna(subset=["Date", "Close"])
+
+    close = history["Close"].to_numpy(dtype=np.float64)
+    volume = history["Volume"].to_numpy(dtype=np.float64)
+    dates = pd.to_datetime(history["Date"])
+    pct_returns = pd.Series(close).pct_change().fillna(0.0)
+
+    history_start = dates.min().date().isoformat()
+    history_end = dates.max().date().isoformat()
+
+    day_count = max((dates.iloc[-1] - dates.iloc[0]).days, 1)
+    cagr_pct = (np.power(close[-1] / close[0], 365.25 / day_count) - 1.0) * 100.0
+    annual_vol_pct = float(np.nanstd(pct_returns.to_numpy(dtype=np.float64), ddof=0) * np.sqrt(252) * 100.0)
+
+    fundamentals = {
+        "price_change_since_2000_pct": float(((close[-1] / close[0]) - 1.0) * 100.0),
+        "annualized_return_pct": float(cagr_pct),
+        "annualized_volatility_pct": annual_vol_pct,
+        "highest_close_since_2000": float(np.nanmax(close)),
+        "lowest_close_since_2000": float(np.nanmin(close)),
+        "current_close": float(close[-1]),
+        "current_volume": float(volume[-1]) if len(volume) else 0.0,
+        "history_start": history_start,
+        "history_end": history_end,
+    }
+
+    headlines = _fetch_yahoo_news_rss(config["yahoo_symbol"], limit=25)
+    if not headlines:
+        fallback_score = _score_text_sentiment(f"{config['name']} futures market stable")
+        headlines = [
+            HeadlineRecord(
+                title=f"{config['name']} market update unavailable, using synthetic placeholder.",
+                published_at=datetime.now(tz=timezone.utc).isoformat(),
+                source="Synthetic Feed",
+                url="",
+                sentiment_score=fallback_score,
+                sentiment_label=_score_to_label(fallback_score),
+            )
+        ]
+
+    headline_scores = np.array([h.sentiment_score for h in headlines], dtype=np.float64)
+    headline_sentiment = float(np.nanmean(headline_scores)) if len(headline_scores) else 0.0
+    momentum_sentiment = float(np.clip(pct_returns.tail(21).mean() * 45.0, -1.0, 1.0))
+    composite_sentiment = float(np.clip((headline_sentiment * 0.70) + (momentum_sentiment * 0.30), -1.0, 1.0))
+
+    monthly_returns = pct_returns.groupby(dates.dt.to_period("M")).mean()
+    rolling_mean = monthly_returns.rolling(window=6, min_periods=1).mean()
+    rolling_std = monthly_returns.rolling(window=6, min_periods=1).std(ddof=0).replace(0.0, np.nan)
+    monthly_score = ((rolling_mean / rolling_std).fillna(0.0) / 2.0).clip(-1.0, 1.0)
+    sentiment_series = [
+        {
+            "month": str(period),
+            "score": float(score),
+            "label": _score_to_label(float(score)),
+        }
+        for period, score in monthly_score.items()
+    ]
+
+    return {
+        "asset_symbol": symbol,
+        "asset_name": config["name"],
+        "yahoo_symbol": config["yahoo_symbol"],
+        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
+        "news_headlines": [asdict(item) for item in headlines],
+        "fundamentals": fundamentals,
+        "sentiment": {
+            "current_composite_score": composite_sentiment,
+            "current_composite_label": _score_to_label(composite_sentiment),
+            "headline_sentiment_score": headline_sentiment,
+            "momentum_sentiment_score": momentum_sentiment,
+            "series_from_2000": sentiment_series,
+        },
+    }
+
+
+def _download_futures_history(yahoo_symbol: str, start_year: int) -> pd.DataFrame:
+    if HAS_YF:
+        try:
+            raw = yf.download(
+                yahoo_symbol,
+                start=f"{start_year}-01-01",
+                auto_adjust=False,
+                progress=False,
+                interval="1d",
+            )
+            if raw is not None and not raw.empty:
+                if isinstance(raw.columns, pd.MultiIndex):
+                    raw.columns = raw.columns.get_level_values(0)
+                frame = raw.reset_index()
+                frame.rename(columns={"index": "Date"}, inplace=True)
+                frame["Date"] = pd.to_datetime(frame["Date"]).dt.tz_localize(None)
+                required = ["Date", "Open", "High", "Low", "Close", "Volume"]
+                missing = [col for col in required if col not in frame.columns]
+                if not missing:
+                    return frame[required].dropna(subset=["Date", "Close"])
+        except Exception:
+            logger.warning("Futures history download failed for %s; using synthetic history.", yahoo_symbol)
+
+    synthetic_n = int((datetime.now(tz=timezone.utc).year - start_year + 1) * 252)
+    synthetic = get_synthetic_futures_bars(
+        symbol=yahoo_symbol.replace("=F", ""),
+        n=max(synthetic_n, 252),
+        start_price=1200.0 if yahoo_symbol == "GC=F" else 4000.0,
+        volatility=9.0,
+        seed=sum(ord(c) for c in yahoo_symbol),
+    )
+    synthetic = synthetic.copy()
+    synthetic["Date"] = pd.date_range(f"{start_year}-01-03", periods=len(synthetic), freq="B")
+    return synthetic[["Date", "Open", "High", "Low", "Close", "Volume"]]
+
+
+def _fetch_yahoo_news_rss(yahoo_symbol: str, limit: int = 25) -> List[HeadlineRecord]:
+    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={yahoo_symbol}&region=US&lang=en-US"
+    try:
+        response = requests.get(url, timeout=8)
+        response.raise_for_status()
+        payload = pd.read_xml(response.text, xpath=".//item")
+        if payload is None or payload.empty:
+            return []
+    except Exception:
+        logger.warning("Yahoo RSS fetch failed for %s.", yahoo_symbol)
+        return []
+
+    clipped = payload.head(limit).fillna("")
+    records: List[HeadlineRecord] = []
+    for row in clipped.itertuples(index=False):
+        title = str(getattr(row, "title", "")).strip()
+        link = str(getattr(row, "link", "")).strip()
+        source = str(getattr(row, "source", "Yahoo Finance")).strip() or "Yahoo Finance"
+        pub_date = str(getattr(row, "pubDate", "")).strip()
+        published_at = _normalise_news_timestamp(pub_date)
+        score = _score_text_sentiment(title)
+        records.append(
+            HeadlineRecord(
+                title=title,
+                published_at=published_at,
+                source=source,
+                url=link,
+                sentiment_score=score,
+                sentiment_label=_score_to_label(score),
+            )
+        )
+    return records
+
+
+def _normalise_news_timestamp(pub_date: str) -> str:
+    if not pub_date:
+        return datetime.now(tz=timezone.utc).isoformat()
+    try:
+        parsed = parsedate_to_datetime(pub_date)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat()
+    except Exception:
+        return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _score_text_sentiment(text: str) -> float:
+    tokens = [t.strip(".,:;!?()[]{}'\"").lower() for t in text.split()]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return 0.0
+
+    token_array = np.array(tokens, dtype=object)
+    positive_count = np.isin(token_array, list(_POSITIVE_SENTIMENT_TOKENS)).sum()
+    negative_count = np.isin(token_array, list(_NEGATIVE_SENTIMENT_TOKENS)).sum()
+    score = float((positive_count - negative_count) / max(len(tokens), 1))
+    return float(np.clip(score * 3.5, -1.0, 1.0))
+
+
+def _score_to_label(score: float) -> str:
+    if score > 0.2:
+        return "bullish"
+    if score < -0.2:
+        return "bearish"
+    return "neutral"
 
 
 # ── Futures / quant terminal data ─────────────────────────────────────────────
@@ -271,3 +538,41 @@ def _synthetic_revenue(ticker: str) -> pd.DataFrame:
     dates = pd.date_range("2019-01-01", periods=20, freq="QE")
     revenues = rng.uniform(1_500, 25_000, 20)
     return pd.DataFrame({"Date": dates, "Revenue": revenues.round(0)})
+
+
+# ── Market intelligence (news / fundamentals / sentiment) ─────────────────────
+
+_intelligence_service = None
+
+
+def _get_intelligence_service():
+    global _intelligence_service
+    if _intelligence_service is None:
+        from data.market_intelligence import MarketIntelligenceService
+        _intelligence_service = MarketIntelligenceService()
+    return _intelligence_service
+
+
+def get_futures_intelligence(force_refresh: bool = False) -> Dict:
+    """Return intelligence bundles for all configured futures assets."""
+    service = _get_intelligence_service()
+    bundles = service.get_all(force_refresh=force_refresh)
+    from data.market_intelligence import bundle_to_dict
+    return {sym: bundle_to_dict(b) for sym, b in bundles.items()}
+
+
+def get_asset_intelligence(symbol: str, force_refresh: bool = False) -> Dict | None:
+    """Return intelligence bundle for a single futures asset."""
+    service = _get_intelligence_service()
+    bundle = service.get_asset(symbol, force_refresh=force_refresh)
+    if bundle is None:
+        return None
+    from data.market_intelligence import bundle_to_dict
+    return bundle_to_dict(bundle)
+
+
+def refresh_futures_intelligence() -> Dict:
+    """Force-refresh all futures intelligence data."""
+    service = _get_intelligence_service()
+    bundles = service.refresh(force=True)
+    return {"refreshed": len(bundles), "assets": list(bundles.keys())}

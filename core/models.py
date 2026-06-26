@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from core.enums import Direction, OrderStatus, OrderType, AssetClass
 
@@ -112,3 +112,55 @@ class Fill:
         """Total cost including commissions (positive = cash outflow for longs)."""
         sign = 1.0 if self.direction == Direction.LONG else -1.0
         return sign * self.fill_price * self.filled_quantity + self.commission
+
+
+@dataclass(frozen=True)
+class NewsItem:
+    """Market news headline for a futures asset."""
+
+    symbol: str
+    headline: str
+    source: str
+    published_at: datetime
+    url: str
+    summary: str = ""
+    sentiment_score: float = 0.0
+
+
+@dataclass(frozen=True)
+class FundamentalDataPoint:
+    """Monthly fundamental snapshot for a futures asset."""
+
+    symbol: str
+    date: datetime
+    avg_price: float
+    avg_volume: float
+    volatility: float
+    high: float
+    low: float
+    open_interest_proxy: float = 0.0
+
+
+@dataclass(frozen=True)
+class SentimentDataPoint:
+    """Monthly sentiment score for a futures asset (-1 bearish … +1 bullish)."""
+
+    symbol: str
+    date: datetime
+    score: float
+    news_count: int = 0
+    momentum_score: float = 0.0
+
+
+@dataclass
+class AssetIntelligenceBundle:
+    """Complete intelligence payload for one futures asset."""
+
+    symbol: str
+    label: str
+    last_price: float
+    day_change_pct: float
+    news: List[NewsItem] = field(default_factory=list)
+    fundamentals: List[FundamentalDataPoint] = field(default_factory=list)
+    sentiment: List[SentimentDataPoint] = field(default_factory=list)
+    updated_at: Optional[datetime] = None
