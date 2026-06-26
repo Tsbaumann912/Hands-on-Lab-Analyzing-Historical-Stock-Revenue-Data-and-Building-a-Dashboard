@@ -23,11 +23,16 @@ import json
 import dash
 from dash import Input, Output, callback
 import dash_bootstrap_components as dbc
+from flask import jsonify, request
 
 # Register custom Plotly theme before anything else
 import app.theme  # noqa: F401
 
 from app.layout import root_layout, NAV_ITEMS
+from app.data_service import (
+    fetch_all_futures_market_intelligence,
+    fetch_futures_asset_intelligence,
+)
 from app.api.market_intelligence_routes import market_intel_bp
 
 # Import page modules (they register their own callbacks via @callback)
@@ -68,7 +73,7 @@ def _health():
     return "ok", 200
 
 
-# ── News & Fundamentals REST API ──────────────────────────────────────────────
+# ── News & Fundamentals REST API (app.news_service — VADER sentiment) ─────────
 
 from app.news_service import (  # noqa: E402
     FUTURES_ASSETS,
@@ -79,7 +84,6 @@ from app.news_service import (  # noqa: E402
     news_items_to_dicts,
     fundamentals_to_dict,
 )
-from flask import jsonify, request as flask_request  # noqa: E402
 
 
 def _json_response(data, status: int = 200):
@@ -112,13 +116,13 @@ def api_list_assets():
 def api_news(asset_key: str):
     """
     GET /api/news/<asset_key>
-    Returns latest news headlines with sentiment scores.
+    Returns latest news headlines with VADER sentiment scores.
     Query params:
       limit  (int, default 50) – max articles to return
     """
     if asset_key not in FUTURES_ASSETS:
         return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
-    limit = min(int(flask_request.args.get("limit", 50)), 200)
+    limit = min(int(request.args.get("limit", 50)), 200)
     items = fetch_asset_news(asset_key, limit=limit)
     return _json_response({
         "asset":  asset_key,
@@ -149,7 +153,7 @@ def api_sentiment(asset_key: str):
     """
     if asset_key not in FUTURES_ASSETS:
         return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
-    start = flask_request.args.get("start", "2000-01-01")
+    start = request.args.get("start", "2000-01-01")
     df = fetch_sentiment_history(asset_key, start=start)
     return _json_response({
         "asset": asset_key,
@@ -168,6 +172,39 @@ def api_refresh(asset_key: str):
         return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
     cleared = invalidate_cache(None if asset_key == "all" else asset_key)
     return _json_response({"cleared": cleared, "asset": asset_key})
+
+
+# ── Unified overview intelligence endpoint (app.data_service — keyword-based) ─
+
+@server.route("/api/futures/overview-intelligence")
+def _futures_overview_intelligence():
+    """
+    GET /api/futures/overview-intelligence
+    Returns bundled headlines + fundamentals + sentiment for all (or one) assets.
+    Query params:
+      symbol     (str, optional) – single asset symbol, e.g. GC
+      start_year (int, default 2000)
+      refresh    (bool, default false)
+    """
+    symbol = (request.args.get("symbol", "") or "").upper().strip()
+    start_year = request.args.get("start_year", default=2000, type=int) or 2000
+    refresh = (request.args.get("refresh", "false") or "").lower() == "true"
+
+    if symbol:
+        return jsonify(
+            fetch_futures_asset_intelligence(
+                symbol=symbol,
+                start_year=start_year,
+                force_refresh=refresh,
+            )
+        )
+
+    return jsonify(
+        fetch_all_futures_market_intelligence(
+            start_year=start_year,
+            force_refresh=refresh,
+        )
+    )
 
 
 application.layout = root_layout()
