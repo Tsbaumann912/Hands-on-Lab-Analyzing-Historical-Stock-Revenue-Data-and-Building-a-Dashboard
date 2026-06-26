@@ -1,4 +1,4 @@
-# Web app production dependencies (Render / Railway / Hugging Face)
+# Web app dependencies for QuantTerminal
 gunicorn>=22.0.0
 numpy>=1.26.0
 pandas>=2.1.0

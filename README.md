@@ -36,24 +36,26 @@ python3 wsgi.py
 # The app opens at: http://127.0.0.1:8050
 ```
 
-## Live Demo — Permanent URL
+## Public URL (Cloudflare Tunnel)
 
-Deploy to **Render** (free tier) for a lasting `*.onrender.com` link that works after this session ends:
+Open QuantTerminal in any browser:
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard)
+**https://pts-instructor-almost-temperatures.trycloudflare.com**
 
-1. Click **Deploy to Render** above (or open [this link](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard))
-2. Sign in with GitHub (free Render account)
-3. Click **Apply** on the blueprint review screen
-4. Wait ~3–5 minutes for the build to finish
+Start the app and tunnel together:
 
-Your permanent app URL will be:
+```bash
+./start-public.sh
+```
 
-**https://quantterminal.onrender.com**
+Or start them separately:
 
-> Free-tier services sleep after 15 minutes of inactivity; the first visit after sleep may take 30–60 seconds to wake up.
+```bash
+python3 wsgi.py    # local server on :8050
+./expose.sh        # Cloudflare quick tunnel only
+```
 
-Alternative hosts: `render.yaml`, `railway.toml`, `Dockerfile`, and `Procfile` are included for Railway, Hugging Face Spaces, or any Docker host.
+The canonical URL is stored in `PUBLIC_URL`. Cloudflare quick tunnels stay at the same address while `cloudflared` keeps running; if you restart the tunnel, run `./expose.sh` and update `PUBLIC_URL` with the new link.
 
 ### Desktop Application Pages
 
