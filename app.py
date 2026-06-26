@@ -39,8 +39,11 @@ from app.pages import (
 
 # ── Initialise Dash app ───────────────────────────────────────────────────────
 
+_assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "assets")
+
 application = dash.Dash(
     __name__,
+    assets_folder=_assets_dir,
     external_stylesheets=[
         dbc.themes.FLATLY,
     ],
