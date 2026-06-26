@@ -42,11 +42,10 @@ from app.pages import (
 application = dash.Dash(
     __name__,
     external_stylesheets=[
-        dbc.themes.CYBORG,
-        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        dbc.themes.FLATLY,
     ],
     suppress_callback_exceptions=True,
-    title="QuantTerminal — Futures & Research",
+    title="QuantTerminal",
     update_title=None,
     meta_tags=[
         {"name": "viewport", "content": "width=device-width, initial-scale=1"},
