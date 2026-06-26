@@ -57,6 +57,10 @@ application = dash.Dash(
 
 server = application.server   # expose Flask server for production deployment
 
+# Mount the Futures Market Intelligence REST API (/api/futures/...)
+from app.api import register_api
+register_api(server)
+
 
 @server.route("/health")
 def _health():

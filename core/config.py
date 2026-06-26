@@ -81,6 +81,17 @@ class BrokerConfig:
 
 
 @dataclass
+class NewsConfig:
+    history_start: str = "2000-01-01"
+    max_headlines: int = 25
+    news_ttl_seconds: int = 300
+    fundamentals_ttl_seconds: int = 3600
+    sentiment_positive_threshold: float = 0.05
+    sentiment_negative_threshold: float = -0.05
+    trading_days_per_year: int = 252
+
+
+@dataclass
 class BacktestConfig:
     engine: str = "vectorbt"
     start_date: str = "2022-01-01"
@@ -103,6 +114,7 @@ class Config:
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    news: NewsConfig = field(default_factory=NewsConfig)
     log_level: str = "INFO"
 
     # ── Factory methods ───────────────────────────────────────────────────────
@@ -125,6 +137,7 @@ class Config:
             portfolio=PortfolioConfig(**raw.get("portfolio", {})),
             broker=BrokerConfig(**raw.get("broker", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
+            news=NewsConfig(**raw.get("news", {})),
             log_level=raw.get("log_level", "INFO"),
         )
 

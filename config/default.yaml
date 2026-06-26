@@ -58,6 +58,17 @@ broker:
   alpaca_base_url: https://paper-api.alpaca.markets
   order_timeout_seconds: 30
 
+# ── Futures News / Fundamental / Sentiment Intelligence ──────────────────────
+# Drives the "Overview" tab intelligence panel and the /api/futures REST API.
+news:
+  history_start: "2000-01-01"     # fundamentals are computed from this date to today
+  max_headlines: 25               # cap on headlines returned per asset
+  news_ttl_seconds: 300           # live news re-fetched after this many seconds
+  fundamentals_ttl_seconds: 3600  # historical fundamentals refreshed hourly
+  sentiment_positive_threshold: 0.05   # compound score above this → Bullish
+  sentiment_negative_threshold: -0.05  # compound score below this → Bearish
+  trading_days_per_year: 252      # annualisation factor for volatility/return
+
 backtest:
   engine: vectorbt
   start_date: "2022-01-01"
