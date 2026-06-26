@@ -29,7 +29,7 @@ futures-terminal/
 pip install -r requirements-web.txt
 
 # 2. Launch the desktop application (browser opens automatically)
-python3 app.py
+python3 wsgi.py
 # OR
 ./run.sh
 

@@ -14,4 +14,4 @@ COPY . .
 ENV PORT=7860
 EXPOSE 7860
 
-CMD gunicorn app:server --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 120
+CMD gunicorn wsgi:server --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 120

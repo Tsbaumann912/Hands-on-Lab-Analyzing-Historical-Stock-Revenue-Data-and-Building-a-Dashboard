@@ -2,7 +2,7 @@
 Quantitative Futures Trading Terminal — Desktop Web Application
 
 Run with:
-    python3 app.py
+    python3 wsgi.py
 
 Then open your browser at: http://127.0.0.1:8050
 """

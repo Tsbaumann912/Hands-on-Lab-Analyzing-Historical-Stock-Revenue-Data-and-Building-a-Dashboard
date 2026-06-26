@@ -3,7 +3,7 @@
 # Creates a temporary Cloudflare quick tunnel to your local Dash server.
 #
 # Prerequisites:
-#   1. App running:  python3 app.py   (or ./run.sh)
+#   1. App running:  python3 wsgi.py   (or ./run.sh)
 #   2. cloudflared:  auto-downloaded to /tmp/cloudflared on first run
 #
 # Usage: ./expose.sh
@@ -19,7 +19,7 @@ LOG="/tmp/cloudflared.log"
 
 if ! curl -sf "http://127.0.0.1:${PORT}/" >/dev/null; then
   echo "Error: nothing listening on http://127.0.0.1:${PORT}"
-  echo "Start the app first:  python3 app.py"
+  echo "Start the app first:  python3 wsgi.py"
   exit 1
 fi
 
