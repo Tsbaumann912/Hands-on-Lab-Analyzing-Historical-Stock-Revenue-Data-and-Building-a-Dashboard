@@ -541,7 +541,262 @@ input[type="number"]:focus {
   font-size: 15px;
 }
 
-/* ── Futures intelligence ──────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Futures News Intelligence Panel ───────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+.news-intelligence-panel {
+  margin-top: 24px;
+}
+
+/* ── Section header ─────────────────────────────────────────────────────── */
+.news-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.news-header-text { flex: 1; }
+.news-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+/* ── Refresh button ─────────────────────────────────────────────────────── */
+.news-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--apple-border-strong);
+  background: var(--apple-bg-elevated);
+  color: var(--apple-blue);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.news-refresh-btn:hover {
+  background: rgba(0, 113, 227, 0.06);
+  border-color: var(--apple-blue);
+}
+.news-refresh-status {
+  font-size: 12px;
+  color: var(--apple-text-tertiary);
+}
+
+/* ── Asset selector pill-bar ────────────────────────────────────────────── */
+.asset-selector-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.asset-selector-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 22px;
+  border: 1.5px solid var(--apple-border-strong);
+  background: var(--apple-bg-elevated);
+  color: var(--apple-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: var(--font-stack);
+  letter-spacing: -0.01em;
+}
+.asset-selector-btn:hover {
+  border-color: var(--apple-blue);
+  color: var(--apple-blue);
+  background: rgba(0, 113, 227, 0.05);
+}
+.asset-selector-btn.active {
+  background: var(--apple-blue);
+  border-color: var(--apple-blue);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+}
+.asset-btn-icon {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.asset-btn-label { }
+
+/* ── Asset title bar ────────────────────────────────────────────────────── */
+.news-asset-title-bar {
+  margin-bottom: 16px;
+  min-height: 0;
+}
+.news-asset-title-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--apple-bg);
+  border-radius: var(--apple-radius-md);
+  border: 1px solid var(--apple-border);
+}
+.news-asset-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.news-asset-text { flex: 1; }
+.news-asset-name {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--apple-text);
+  letter-spacing: -0.02em;
+}
+.news-asset-full-name {
+  display: block;
+  font-size: 13px;
+  color: var(--apple-text-secondary);
+  margin-top: 2px;
+}
+.news-asset-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.news-article-count {
+  font-size: 12px;
+  color: var(--apple-text-tertiary);
+  background: var(--apple-bg-elevated);
+  border: 1px solid var(--apple-border);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.news-sector-tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+.news-tabs {
+  border-bottom: 1px solid var(--apple-border) !important;
+  margin-bottom: 0 !important;
+}
+.news-tabs .tab--selected { font-weight: 600; }
+.news-tab {
+  font-size: 14px !important;
+  font-family: var(--font-stack) !important;
+  color: var(--apple-text-secondary) !important;
+  padding: 10px 18px !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  cursor: pointer;
+}
+.news-tab-selected {
+  color: var(--apple-blue) !important;
+  border-bottom: 2px solid var(--apple-blue) !important;
+  background: transparent !important;
+}
+.news-tab-body {
+  padding-top: 20px;
+}
+
+/* ── Empty panel ────────────────────────────────────────────────────────── */
+.empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  gap: 12px;
+}
+.empty-panel-icon {
+  font-size: 40px;
+  opacity: 0.4;
+}
+.empty-panel-text {
+  font-size: 14px;
+  color: var(--apple-text-secondary);
+  text-align: center;
+  max-width: 380px;
+  line-height: 1.5;
+  margin: 0;
+}
+.no-data-msg {
+  font-size: 14px;
+  color: var(--apple-text-tertiary);
+  text-align: center;
+  padding: 32px;
+}
+
+/* ── News headline cards ─────────────────────────────────────────────────── */
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.news-card {
+  padding: 14px 16px;
+  background: var(--apple-bg-elevated);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.news-card:hover {
+  border-color: rgba(0, 113, 227, 0.35);
+  box-shadow: var(--apple-shadow-sm);
+}
+
+.news-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.sentiment-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  letter-spacing: 0.02em;
+}
+.sentiment-score {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.news-publisher {
+  font-size: 11px;
+  color: var(--apple-text-secondary);
+  font-weight: 500;
+}
+
+/* ── Futures intelligence (asset-card grid, from PR #6) ─────────────────── */
 .intel-status {
   margin-bottom: 20px;
 }
@@ -657,11 +912,17 @@ input[type="number"]:focus {
   text-align: right;
 }
 
+/* .news-list: merged — our card-flex layout (max-height 640px) */
 .news-list {
-  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 640px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
+/* news-item: from PR #6 (used in asset-card detail panel) */
 .news-item {
   padding: 16px 0;
   border-bottom: 1px solid var(--apple-border);
@@ -669,24 +930,208 @@ input[type="number"]:focus {
 
 .news-item:last-child { border-bottom: none; }
 
+/* .news-meta: merged — our values (gap 8px, flex-wrap) */
 .news-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .news-source {
   font-size: 12px;
   color: var(--apple-text-secondary);
 }
-
 .news-date {
   font-size: 11px;
   color: var(--apple-text-tertiary);
   margin-left: auto;
 }
 
+.news-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--apple-text);
+  line-height: 1.4;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.015em;
+}
+.news-summary {
+  font-size: 12px;
+  color: var(--apple-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Fundamentals panel ─────────────────────────────────────────────────── */
+.fund-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fund-price-block,
+.fund-section-block {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--apple-border);
+}
+.fund-section-block:last-child,
+.fund-price-block:last-child {
+  border-bottom: none;
+}
+
+.fund-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 12px 0;
+}
+
+.fund-row {
+  margin-bottom: 12px;
+}
+.fund-row:last-child { margin-bottom: 0; }
+
+.fund-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.fund-row-grid:last-child { margin-bottom: 0; }
+
+.fund-cell { }
+
+.fund-label {
+  display: block;
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.fund-value {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--apple-text);
+  letter-spacing: -0.015em;
+}
+.fund-value-lg {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+.fund-value.positive { color: var(--apple-green); }
+.fund-value.negative { color: var(--apple-red); }
+
+.fund-desc {
+  font-size: 14px;
+  color: var(--apple-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.fund-etf-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--apple-text);
+  margin: 0 0 12px 0;
+}
+
+.fund-updated {
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+/* ── Key drivers tags ────────────────────────────────────────────────────── */
+.driver-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.driver-tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--apple-blue);
+  border: 1px solid rgba(0, 113, 227, 0.2);
+}
+
+/* ── Macro context list ──────────────────────────────────────────────────── */
+.macro-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.macro-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--apple-border);
+}
+.macro-row:last-child { border-bottom: none; }
+.macro-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-text);
+}
+.macro-desc {
+  font-size: 13px;
+  color: var(--apple-text-secondary);
+  line-height: 1.5;
+}
+
+/* ── Sentiment panel ─────────────────────────────────────────────────────── */
+.sent-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 4px;
+}
+@media (max-width: 768px) {
+  .sent-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+.sent-stat-cell {
+  background: var(--apple-bg);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  padding: 12px 14px;
+}
+.sent-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.sent-stat-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.sent-footnote {
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  line-height: 1.5;
+  margin-top: 12px;
+  margin-bottom: 0;
+  padding: 0 4px;
+}
+
+/* news-headline: from PR #6 (used in asset-card detail news panel) */
 .news-headline {
   font-size: 16px;
   font-weight: 500;
@@ -700,9 +1145,10 @@ input[type="number"]:focus {
   color: var(--apple-blue);
 }
 
+/* .news-summary: merged — our values (12px, margin: 0); used in both panels */
 .news-summary {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--apple-text-secondary);
-  margin: 8px 0 0;
   line-height: 1.5;
+  margin: 0;
 }
