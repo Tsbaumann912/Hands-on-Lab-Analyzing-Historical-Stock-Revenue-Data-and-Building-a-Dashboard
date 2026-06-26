@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# ── Expose QuantTerminal to the public internet ───────────────────────────────
-# Creates a temporary Cloudflare quick tunnel to your local Dash server.
+# ── Expose QuantTerminal via Cloudflare quick tunnel ──────────────────────────
+# Creates a public trycloudflare.com URL for the local Dash server.
+#
+# Canonical URL (see PUBLIC_URL):
+#   https://pts-instructor-almost-temperatures.trycloudflare.com
 #
 # Prerequisites:
-#   1. App running:  python3 wsgi.py   (or ./run.sh)
+#   1. App running:  python3 wsgi.py   (or ./run.sh / ./start-public.sh)
 #   2. cloudflared:  auto-downloaded to /tmp/cloudflared on first run
 #
 # Usage: ./expose.sh
@@ -40,6 +43,7 @@ TUNNEL_PID=$!
 for _ in $(seq 1 30); do
   URL=$(rg -o 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)
   if [ -n "$URL" ]; then
+    echo "$URL" > PUBLIC_URL
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  QuantTerminal is live at:"
