@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import warnings
 warnings.filterwarnings("ignore")
 
+import json
+
 import dash
 from dash import Input, Output, callback
 import dash_bootstrap_components as dbc
@@ -61,6 +63,108 @@ server = application.server   # expose Flask server for production deployment
 @server.route("/health")
 def _health():
     return "ok", 200
+
+
+# ── News & Fundamentals REST API ──────────────────────────────────────────────
+
+from app.news_service import (  # noqa: E402
+    FUTURES_ASSETS,
+    fetch_asset_news,
+    fetch_asset_fundamentals,
+    fetch_sentiment_history,
+    invalidate_cache,
+    news_items_to_dicts,
+    fundamentals_to_dict,
+)
+from flask import jsonify, request as flask_request  # noqa: E402
+
+
+def _json_response(data, status: int = 200):
+    resp = server.response_class(
+        json.dumps(data, default=str),
+        status=status,
+        mimetype="application/json",
+    )
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
+
+@server.route("/api/assets")
+def api_list_assets():
+    """List all registered futures assets with metadata."""
+    payload = {
+        k: {
+            "name":     v["name"],
+            "full_name": v["full_name"],
+            "sector":   v["sector"],
+            "color":    v["color"],
+            "icon":     v["icon"],
+        }
+        for k, v in FUTURES_ASSETS.items()
+    }
+    return _json_response(payload)
+
+
+@server.route("/api/news/<asset_key>")
+def api_news(asset_key: str):
+    """
+    GET /api/news/<asset_key>
+    Returns latest news headlines with sentiment scores.
+    Query params:
+      limit  (int, default 50) – max articles to return
+    """
+    if asset_key not in FUTURES_ASSETS:
+        return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
+    limit = min(int(flask_request.args.get("limit", 50)), 200)
+    items = fetch_asset_news(asset_key, limit=limit)
+    return _json_response({
+        "asset":  asset_key,
+        "count":  len(items),
+        "items":  news_items_to_dicts(items),
+    })
+
+
+@server.route("/api/fundamentals/<asset_key>")
+def api_fundamentals(asset_key: str):
+    """
+    GET /api/fundamentals/<asset_key>
+    Returns fundamental snapshot: price, 52-week range, ETF info, macro context.
+    """
+    if asset_key not in FUTURES_ASSETS:
+        return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
+    snap = fetch_asset_fundamentals(asset_key)
+    return _json_response(fundamentals_to_dict(snap))
+
+
+@server.route("/api/sentiment/<asset_key>")
+def api_sentiment(asset_key: str):
+    """
+    GET /api/sentiment/<asset_key>
+    Returns monthly sentiment series from 2000 to present.
+    Query params:
+      start  (str YYYY-MM-DD, default "2000-01-01")
+    """
+    if asset_key not in FUTURES_ASSETS:
+        return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
+    start = flask_request.args.get("start", "2000-01-01")
+    df = fetch_sentiment_history(asset_key, start=start)
+    return _json_response({
+        "asset": asset_key,
+        "start": start,
+        "rows":  df.to_dict(orient="records"),
+    })
+
+
+@server.route("/api/refresh/<asset_key>", methods=["POST"])
+def api_refresh(asset_key: str):
+    """
+    POST /api/refresh/<asset_key>
+    Invalidates the in-process cache for the asset and triggers a fresh fetch.
+    """
+    if asset_key not in FUTURES_ASSETS and asset_key != "all":
+        return _json_response({"error": f"Unknown asset: {asset_key}"}, 404)
+    cleared = invalidate_cache(None if asset_key == "all" else asset_key)
+    return _json_response({"cleared": cleared, "asset": asset_key})
 
 
 application.layout = root_layout()
