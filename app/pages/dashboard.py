@@ -227,7 +227,7 @@ def layout() -> html.Div:
             html.Div([
                 dcc.Tabs(
                     id="overview-futures-intel-tabs",
-                    value="GC",
+                    value="ES",
                     children=[
                         dcc.Tab(
                             label=f"{sym} — {FUTURES_ASSET_CONFIG[sym]['name']}",
@@ -258,7 +258,7 @@ def render_futures_intelligence(symbol: str, n_intervals: int):
         start_year=2000,
         force_refresh=(n_intervals == 0),
     )
-    selected = payload["assets"].get(symbol, payload["assets"]["GC"])
+    selected = payload["assets"].get(symbol, payload["assets"]["ES"])
 
     fundamentals = selected.get("fundamentals", {})
     sentiment = selected.get("sentiment", {})
