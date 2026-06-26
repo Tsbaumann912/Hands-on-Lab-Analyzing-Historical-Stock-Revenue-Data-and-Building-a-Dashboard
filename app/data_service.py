@@ -538,3 +538,41 @@ def _synthetic_revenue(ticker: str) -> pd.DataFrame:
     dates = pd.date_range("2019-01-01", periods=20, freq="QE")
     revenues = rng.uniform(1_500, 25_000, 20)
     return pd.DataFrame({"Date": dates, "Revenue": revenues.round(0)})
+
+
+# ── Market intelligence (news / fundamentals / sentiment) ─────────────────────
+
+_intelligence_service = None
+
+
+def _get_intelligence_service():
+    global _intelligence_service
+    if _intelligence_service is None:
+        from data.market_intelligence import MarketIntelligenceService
+        _intelligence_service = MarketIntelligenceService()
+    return _intelligence_service
+
+
+def get_futures_intelligence(force_refresh: bool = False) -> Dict:
+    """Return intelligence bundles for all configured futures assets."""
+    service = _get_intelligence_service()
+    bundles = service.get_all(force_refresh=force_refresh)
+    from data.market_intelligence import bundle_to_dict
+    return {sym: bundle_to_dict(b) for sym, b in bundles.items()}
+
+
+def get_asset_intelligence(symbol: str, force_refresh: bool = False) -> Dict | None:
+    """Return intelligence bundle for a single futures asset."""
+    service = _get_intelligence_service()
+    bundle = service.get_asset(symbol, force_refresh=force_refresh)
+    if bundle is None:
+        return None
+    from data.market_intelligence import bundle_to_dict
+    return bundle_to_dict(bundle)
+
+
+def refresh_futures_intelligence() -> Dict:
+    """Force-refresh all futures intelligence data."""
+    service = _get_intelligence_service()
+    bundles = service.refresh(force=True)
+    return {"refreshed": len(bundles), "assets": list(bundles.keys())}

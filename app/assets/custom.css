@@ -540,3 +540,169 @@ input[type="number"]:focus {
   color: var(--apple-text-secondary);
   font-size: 15px;
 }
+
+/* ── Futures intelligence ──────────────────────────────────────────────────── */
+.intel-status {
+  margin-bottom: 20px;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.asset-card {
+  background: var(--apple-bg-secondary);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.asset-card:hover {
+  box-shadow: var(--apple-shadow-md);
+  transform: translateY(-2px);
+}
+
+.asset-card-symbol {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.asset-card-label {
+  font-size: 12px;
+  color: var(--apple-text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+.asset-card-price {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--apple-text);
+}
+
+.asset-card-change {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.asset-card-change.positive { color: var(--apple-green); }
+.asset-card-change.negative { color: var(--apple-red); }
+
+.asset-card-meta {
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  margin-top: 8px;
+}
+
+.asset-detail-panel {
+  background: var(--apple-bg-secondary);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-lg);
+  padding: 24px;
+  margin-top: 8px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-left: 16px;
+}
+
+.detail-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 8px 0 0;
+  display: inline;
+}
+
+.detail-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-header-right {
+  text-align: right;
+}
+
+.detail-price {
+  font-size: 28px;
+  font-weight: 600;
+  display: block;
+}
+
+.detail-change {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.detail-change.positive { color: var(--apple-green); }
+.detail-change.negative { color: var(--apple-red); }
+
+.detail-updated {
+  font-size: 12px;
+  color: var(--apple-text-tertiary);
+  margin-top: 16px;
+  text-align: right;
+}
+
+.news-list {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.news-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--apple-border);
+}
+
+.news-item:last-child { border-bottom: none; }
+
+.news-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.news-source {
+  font-size: 12px;
+  color: var(--apple-text-secondary);
+}
+
+.news-date {
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  margin-left: auto;
+}
+
+.news-headline {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--apple-text);
+  text-decoration: none;
+  line-height: 1.4;
+  display: block;
+}
+
+.news-headline:hover {
+  color: var(--apple-blue);
+}
+
+.news-summary {
+  font-size: 13px;
+  color: var(--apple-text-secondary);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
