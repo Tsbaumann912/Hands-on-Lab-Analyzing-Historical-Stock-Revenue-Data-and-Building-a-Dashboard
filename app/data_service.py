@@ -7,9 +7,9 @@ All methods are cached for the session to avoid redundant API calls.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import timezone
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -119,14 +119,14 @@ def run_backtest_for_ui(
     """
     Run a full backtest using the quant terminal engine and return a results dict.
     """
-    import sys, os
+    import sys
+    import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
     from core.config import Config
     from core.enums import AssetClass
     from core.models import Bar
     from engine.backtest import BacktestEngine
-    from engine.metrics import compute_metrics
     from strategies.mean_reversion import MeanReversionRSI
     from strategies.momentum import MomentumBreakout
     from strategies.trend_following import TrendFollowingMACD
@@ -189,11 +189,12 @@ def compute_indicators_for_ui(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     Compute all indicators from our library on the given price DataFrame.
     Returns a dict of {indicator_name: array}.
     """
-    import sys, os
+    import sys
+    import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
     from indicators.momentum import rsi, macd
-    from indicators.trend import sma, ema, supertrend
+    from indicators.trend import sma, ema
     from indicators.volatility import atr, bollinger_bands
     from indicators.volume import obv, vwap
 
@@ -205,7 +206,8 @@ def compute_indicators_for_ui(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     result = {}
 
     r = rsi(close, 14)
-    if r is not None: result["RSI_14"] = r
+    if r is not None:
+        result["RSI_14"] = r
 
     m = macd(close, 12, 26, 9)
     if m is not None:
@@ -220,20 +222,26 @@ def compute_indicators_for_ui(df: pd.DataFrame) -> Dict[str, np.ndarray]:
         result["BB_lower"]  = bb.lower
 
     atr_v = atr(high, low, close, 14)
-    if atr_v is not None: result["ATR_14"] = atr_v
+    if atr_v is not None:
+        result["ATR_14"] = atr_v
 
     sma20 = sma(close, 20)
     sma50 = sma(close, 50)
     ema20 = ema(close, 20)
-    if sma20 is not None: result["SMA_20"] = sma20
-    if sma50 is not None: result["SMA_50"] = sma50
-    if ema20 is not None: result["EMA_20"] = ema20
+    if sma20 is not None:
+        result["SMA_20"] = sma20
+    if sma50 is not None:
+        result["SMA_50"] = sma50
+    if ema20 is not None:
+        result["EMA_20"] = ema20
 
     obv_v = obv(close, volume)
-    if obv_v is not None: result["OBV"] = obv_v
+    if obv_v is not None:
+        result["OBV"] = obv_v
 
     vwap_v = vwap(high, low, close, volume)
-    if vwap_v is not None: result["VWAP"] = vwap_v
+    if vwap_v is not None:
+        result["VWAP"] = vwap_v
 
     return result
 

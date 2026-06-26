@@ -9,9 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal as _signal
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Type
 
 from brokers.base import BrokerBase
 from core.config import Config

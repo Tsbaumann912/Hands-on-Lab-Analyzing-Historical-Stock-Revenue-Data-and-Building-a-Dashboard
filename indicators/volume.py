@@ -6,7 +6,6 @@ from typing import Optional
 
 import numpy as np
 
-from indicators._base import _validate_warmup
 
 
 def obv(close: np.ndarray, volume: np.ndarray) -> Optional[np.ndarray]:

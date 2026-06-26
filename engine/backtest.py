@@ -103,7 +103,7 @@ class BacktestEngine:
         # Build a unified timeline: list of (timestamp, symbol, bar)
         timeline = self._build_timeline(bars)
 
-        for ts, symbol, bar in timeline:
+        for _ts, symbol, bar in timeline:
             signal = strategy.update(bar)
 
             if signal.direction != Direction.FLAT:

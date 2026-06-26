@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional, Tuple
+from typing import NamedTuple, Optional
 
 import numpy as np
 
-from indicators._base import _fill_warmup, _validate_warmup
+from indicators._base import _validate_warmup
 
 
 def rsi(close: np.ndarray, period: int = 14) -> Optional[np.ndarray]:

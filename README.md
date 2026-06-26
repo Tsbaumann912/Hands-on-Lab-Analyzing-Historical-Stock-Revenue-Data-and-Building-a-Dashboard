@@ -165,6 +165,20 @@ This project is designed to be extended via Cursor's Composer (`Cmd+I`):
 **Add a new indicator:**
 > "In `indicators/`, add a `vwap_bands` function that computes VWAP ± N standard deviations of price from VWAP, following the existing pattern in `volatility.py`."
 
+## Project Retrieval (QuantTermProj)
+
+The project is saved as tag **`QuantTermProj-v1.0.0`** and a portable bundle file `QuantTermProj-v1.0.0.bundle` in the repo root. See **`RESTORE.md`** for full instructions.
+
+```bash
+# Clone the project into a fresh QuantTermProj repo
+git clone --branch cursor/quant-futures-terminal-9269 \
+  https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard \
+  QuantTermProj
+cd QuantTermProj
+git remote set-url origin https://github.com/YOUR_USERNAME/QuantTermProj
+git push -u origin HEAD:main
+```
+
 ## Security
 
 - API keys are loaded from environment variables only (never hardcoded)
