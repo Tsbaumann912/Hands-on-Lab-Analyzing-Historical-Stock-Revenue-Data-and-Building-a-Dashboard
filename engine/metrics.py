@@ -7,7 +7,7 @@ No loops over individual return observations.
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 
@@ -47,9 +47,6 @@ def compute_metrics(
     total_return = (eq[-1] - eq[0]) / eq[0]
     n_years = len(returns) / periods_per_year
     cagr = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0.0
-
-    mean_return = returns.mean()
-    std_return = returns.std(ddof=1) if len(returns) > 1 else 1e-9
 
     # ── Risk-adjusted return ───────────────────────────────────────────────
     rf_period = (1 + risk_free_rate) ** (1 / periods_per_year) - 1

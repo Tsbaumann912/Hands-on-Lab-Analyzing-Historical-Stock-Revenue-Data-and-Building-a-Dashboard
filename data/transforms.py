@@ -74,7 +74,6 @@ def _panama_roll(df: "pl.DataFrame", price_col: str) -> "pl.DataFrame":
         roll_indices = df.with_row_index().filter(roll_mask)["index"].to_list()
 
         prices = df[price_col].to_numpy().copy().astype(np.float64)
-        contracts = df["contract"].to_list()
 
         # Walk backwards through roll points and apply the back-adjustment ratio
         cumulative_adj = 1.0

@@ -5,8 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from core.models import Fill, Order, Signal
-from risk.risk_manager import RiskDecision
+from core.models import Fill, Order
 
 
 class BrokerBase(ABC):

@@ -8,10 +8,9 @@ synthetic (or real) futures price chart.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import dcc, html, Input, Output, callback, State
+from dash import dcc, html, Input, Output, callback
 import dash_bootstrap_components as dbc
 
 from app.theme import COLORS

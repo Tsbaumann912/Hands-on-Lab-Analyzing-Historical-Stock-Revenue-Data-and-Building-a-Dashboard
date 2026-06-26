@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import dcc, html, Input, Output, callback, State
+from dash import dcc, html
 import dash_bootstrap_components as dbc
 
 from app.theme import COLORS
-from app.data_service import run_backtest_for_ui, get_synthetic_futures_bars
+from app.data_service import run_backtest_for_ui
 
 
 def _drawdown_gauge(drawdown_pct: float, limit_pct: float = 3.0) -> go.Figure:

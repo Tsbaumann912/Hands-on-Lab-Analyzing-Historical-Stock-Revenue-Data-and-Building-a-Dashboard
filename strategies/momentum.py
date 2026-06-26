@@ -9,7 +9,6 @@ import numpy as np
 from core.config import Config
 from core.enums import Direction
 from core.models import Bar, Signal
-from indicators.trend import sma, ema
 from indicators.volatility import atr
 from indicators.volume import volume_oscillator
 from strategies.base import Strategy

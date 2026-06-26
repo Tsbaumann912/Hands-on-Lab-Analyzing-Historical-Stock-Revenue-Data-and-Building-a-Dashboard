@@ -10,9 +10,9 @@ Design principles:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from core.config import Config, PortfolioConfig
 from core.enums import Direction

@@ -6,7 +6,6 @@ for any futures contract with full drill-down charts.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dash import dcc, html, Input, Output, callback
@@ -75,10 +74,6 @@ def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:
     # ── Row 2: RSI ────────────────────────────────────────────────────────
     if "RSI_14" in inds:
         rsi = inds["RSI_14"]
-        colors_rsi = [
-            COLORS["red"] if v > 70 else COLORS["green"] if v < 30 else COLORS["blue"]
-            for v in rsi
-        ]
         fig.add_trace(go.Scatter(
             x=dates, y=rsi, name="RSI (14)",
             mode="lines", line=dict(color=COLORS["blue"], width=1.3),

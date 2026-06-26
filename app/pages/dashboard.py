@@ -5,14 +5,12 @@ watchlist, and quick-access metrics.
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
 from app.theme import COLORS
-from app.data_service import fetch_stock_history, get_synthetic_futures_bars
+from app.data_service import fetch_stock_history
 
 
 # ── Watchlist configuration ───────────────────────────────────────────────────

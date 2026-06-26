@@ -5,7 +5,6 @@ Root application layout: sidebar navigation + dynamic page content.
 from __future__ import annotations
 
 from dash import dcc, html
-import dash_bootstrap_components as dbc
 
 
 NAV_ITEMS = [

@@ -16,7 +16,7 @@ from dash import dcc, html, Input, Output, State, callback, no_update
 import dash_bootstrap_components as dbc
 
 from app.theme import COLORS
-from app.data_service import run_backtest_for_ui, get_synthetic_futures_bars
+from app.data_service import run_backtest_for_ui
 
 
 STRATEGIES = [
@@ -378,7 +378,6 @@ def update_results(store):
                         "borderBottom": "1px solid #111827"}
         rows = []
         for f in fills:
-            color = COLORS["green"] if f["direction"] == "LONG" else COLORS["red"]
             rows.append(html.Tr([
                 html.Td(html.Span(f["direction"], className=f"tag {'tag-green' if f['direction']=='LONG' else 'tag-red'}"), style=cell_style),
                 html.Td(f"{f['qty']:.0f}", style=cell_style),

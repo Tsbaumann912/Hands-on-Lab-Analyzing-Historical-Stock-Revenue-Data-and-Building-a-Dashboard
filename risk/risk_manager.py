@@ -19,8 +19,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, auto
-from typing import Dict, List, Optional, Tuple
+from enum import Enum
+from typing import Dict, List, Optional
 
 from core.config import Config
 from core.enums import Direction
@@ -254,7 +254,6 @@ class RiskManager:
             )
 
         # Return a new Signal with updated levels (Signal is mutable dataclass)
-        from dataclasses import replace as dc_replace
         return Signal(
             symbol=signal.symbol,
             direction=signal.direction,

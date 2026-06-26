@@ -9,13 +9,12 @@ for both live and paper endpoints — the URL is controlled by
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from brokers.base import BrokerBase
 from core.config import Config
-from core.enums import Direction, OrderStatus, OrderType
+from core.enums import Direction, OrderType
 from core.models import Fill, Order
 
 logger = logging.getLogger(__name__)
