@@ -21,11 +21,16 @@ warnings.filterwarnings("ignore")
 import dash
 from dash import Input, Output, callback
 import dash_bootstrap_components as dbc
+from flask import jsonify, request
 
 # Register custom Plotly theme before anything else
 import app.theme  # noqa: F401
 
 from app.layout import root_layout, NAV_ITEMS
+from app.data_service import (
+    fetch_all_futures_market_intelligence,
+    fetch_futures_asset_intelligence,
+)
 from app.api.market_intelligence_routes import market_intel_bp
 
 # Import page modules (they register their own callbacks via @callback)
@@ -64,6 +69,29 @@ server.register_blueprint(market_intel_bp)
 @server.route("/health")
 def _health():
     return "ok", 200
+
+
+@server.route("/api/futures/overview-intelligence")
+def _futures_overview_intelligence():
+    symbol = (request.args.get("symbol", "") or "").upper().strip()
+    start_year = request.args.get("start_year", default=2000, type=int) or 2000
+    refresh = (request.args.get("refresh", "false") or "").lower() == "true"
+
+    if symbol:
+        return jsonify(
+            fetch_futures_asset_intelligence(
+                symbol=symbol,
+                start_year=start_year,
+                force_refresh=refresh,
+            )
+        )
+
+    return jsonify(
+        fetch_all_futures_market_intelligence(
+            start_year=start_year,
+            force_refresh=refresh,
+        )
+    )
 
 
 application.layout = root_layout()
