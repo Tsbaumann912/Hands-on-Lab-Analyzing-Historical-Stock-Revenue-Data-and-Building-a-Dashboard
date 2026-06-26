@@ -25,8 +25,8 @@ futures-terminal/
 ## Quick Start
 
 ```bash
-# 1. Install all dependencies
-pip install -r requirements.txt
+# 1. Install web dependencies
+pip install -r requirements-web.txt
 
 # 2. Launch the desktop application (browser opens automatically)
 python3 app.py
@@ -35,6 +35,25 @@ python3 app.py
 
 # The app opens at: http://127.0.0.1:8050
 ```
+
+## Live Demo — Permanent URL
+
+Deploy to **Render** (free tier) for a lasting `*.onrender.com` link that works after this session ends:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard)
+
+1. Click **Deploy to Render** above (or open [this link](https://render.com/deploy?repo=https://github.com/Tsbaumann912/Hands-on-Lab-Analyzing-Historical-Stock-Revenue-Data-and-Building-a-Dashboard))
+2. Sign in with GitHub (free Render account)
+3. Click **Apply** on the blueprint review screen
+4. Wait ~3–5 minutes for the build to finish
+
+Your permanent app URL will be:
+
+**https://quantterminal.onrender.com**
+
+> Free-tier services sleep after 15 minutes of inactivity; the first visit after sleep may take 30–60 seconds to wake up.
+
+Alternative hosts: `render.yaml`, `railway.toml`, `Dockerfile`, and `Procfile` are included for Railway, Hugging Face Spaces, or any Docker host.
 
 ### Desktop Application Pages
 
