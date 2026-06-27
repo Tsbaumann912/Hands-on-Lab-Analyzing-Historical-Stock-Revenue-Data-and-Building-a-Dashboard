@@ -637,7 +637,7 @@ def fetch_asset_fundamentals(asset_key: str) -> FundamentalsSnapshot:
         return cached
 
     meta = FUTURES_ASSETS[asset_key]
-    now_label = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now_label = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     # Defaults
     current_price = 0.0

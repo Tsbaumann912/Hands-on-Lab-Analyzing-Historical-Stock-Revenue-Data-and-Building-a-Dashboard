@@ -132,7 +132,7 @@ class TestSignalContract:
                 symbol="ES.c.0",
                 direction=Direction.LONG,
                 strength=1.5,  # invalid: > 1.0
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 strategy_name="test",
             )
 

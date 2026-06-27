@@ -124,35 +124,30 @@ def ohlcv_dataframe_to_bars(
     Convert an OHLCV DataFrame (``Date, Open, High, Low, Close, Volume``) into a
     list of :class:`~core.models.Bar` objects with tz-aware UTC timestamps.
 
-    Iteration here is over already-aggregated bars (control flow over the bar
-    axis), not over raw ticks or array elements.
+    NumPy arrays are extracted once; timestamp conversion is vectorised via
+    pandas before the final list comprehension assembles Bar dataclasses.
     """
     if df is None or df.empty:
         return []
 
-    dates = pd.to_datetime(df["Date"])
-    opens = df["Open"].to_numpy(dtype=np.float64)
-    highs = df["High"].to_numpy(dtype=np.float64)
-    lows = df["Low"].to_numpy(dtype=np.float64)
-    closes = df["Close"].to_numpy(dtype=np.float64)
+    dates_utc = pd.to_datetime(df["Date"]).dt.tz_localize(None)
+    opens   = df["Open"].to_numpy(dtype=np.float64)
+    highs   = df["High"].to_numpy(dtype=np.float64)
+    lows    = df["Low"].to_numpy(dtype=np.float64)
+    closes  = df["Close"].to_numpy(dtype=np.float64)
     volumes = df["Volume"].to_numpy(dtype=np.float64)
 
-    bars: List[Bar] = []
-    for i in range(len(df)):
-        ts = dates.iloc[i].to_pydatetime()
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        bars.append(
-            Bar(
-                symbol=symbol,
-                timestamp=ts,
-                open=float(opens[i]),
-                high=float(highs[i]),
-                low=float(lows[i]),
-                close=float(closes[i]),
-                volume=float(volumes[i]),
-                asset_class=asset_class,
-                contract_multiplier=contract_multiplier,
-            )
+    return [
+        Bar(
+            symbol=symbol,
+            timestamp=ts.to_pydatetime().replace(tzinfo=timezone.utc),
+            open=float(opens[i]),
+            high=float(highs[i]),
+            low=float(lows[i]),
+            close=float(closes[i]),
+            volume=float(volumes[i]),
+            asset_class=asset_class,
+            contract_multiplier=contract_multiplier,
         )
-    return bars
+        for i, ts in enumerate(dates_utc)
+    ]

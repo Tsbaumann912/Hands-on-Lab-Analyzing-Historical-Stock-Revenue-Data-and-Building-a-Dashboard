@@ -297,7 +297,14 @@ class WalkForwardOptimizer:
 
     @staticmethod
     def _aggregate_metrics(metrics_list: List[Dict[str, float]]) -> Dict[str, float]:
-        """Average OOS metrics across all WFO windows."""
+        """
+        Aggregate OOS metrics across all WFO windows using a robust mean.
+
+        Values beyond ±1 000 are clipped before averaging so that a single
+        degenerate window (e.g. equity collapses to zero producing Sharpe ≈ −1e6)
+        does not poison the aggregate — which would otherwise misrepresent
+        expected live performance.
+        """
         if not metrics_list:
             return {}
         keys = metrics_list[0].keys()
@@ -305,7 +312,11 @@ class WalkForwardOptimizer:
         for k in keys:
             vals = np.array([m.get(k, np.nan) for m in metrics_list], dtype=np.float64)
             vals = vals[~np.isnan(vals)]
-            agg[k] = float(vals.mean()) if len(vals) > 0 else np.nan
+            if len(vals) == 0:
+                agg[k] = np.nan
+                continue
+            vals_clipped = np.clip(vals, -1_000.0, 1_000.0)
+            agg[k] = float(vals_clipped.mean())
         return agg
 
 
