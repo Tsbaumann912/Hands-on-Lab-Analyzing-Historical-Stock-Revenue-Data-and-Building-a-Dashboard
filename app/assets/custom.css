@@ -1345,6 +1345,39 @@ input[type="number"]:focus {
   color: var(--apple-text-secondary);
 }
 
+/* ── Futures Data — coverage badge ──────────────────────────────────────────── */
+.fut-coverage-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 10px 14px;
+  background: var(--apple-bg);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.badge-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.badge-key {
+  font-weight: 600;
+  color: var(--apple-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.badge-val {
+  color: var(--apple-text-tertiary);
+}
+
+.badge-real  { color: var(--apple-blue) !important; }
+.badge-synth { color: var(--apple-orange) !important; }
+
 /* ── Charts page — mode tabs ─────────────────────────────────────────────────── */
 .charts-mode-tabs {
   border-bottom: 1px solid var(--apple-border) !important;
