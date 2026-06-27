@@ -401,6 +401,17 @@ def toggle_mode_controls(mode: str):
 
 
 @callback(
+    Output("sl-results-store", "data", allow_duplicate=True),
+    Output("sl-run-status", "children", allow_duplicate=True),
+    Input("sl-mode", "value"),
+    prevent_initial_call=True,
+)
+def clear_results_on_mode_change(_mode: str):
+    """Reset the results panel when the analysis mode changes."""
+    return None, ""
+
+
+@callback(
     Output("sl-opt-params", "options"),
     Output("sl-opt-params", "value"),
     Input("sl-strategy", "value"),
