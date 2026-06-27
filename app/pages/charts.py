@@ -221,6 +221,10 @@ def layout() -> html.Div:
         # Hidden sink for clientside callback return value
         html.Div(id="tv-widget-sink", style={"display": "none"}),
 
+        # One-shot interval fires 800 ms after page load to ensure the widget
+        # initialises even if the first callback ran before the DOM was ready.
+        dcc.Interval(id="tv-init-interval", interval=800, max_intervals=1),
+
     ], className="page-content charts-page")
 
 
@@ -232,7 +236,7 @@ def layout() -> html.Div:
 
 clientside_callback(
     """
-    function(symbolInput, quickSymbol, interval, chartStyle, studies, theme) {
+    function(symbolInput, quickSymbol, interval, chartStyle, studies, theme, _tick) {
 
         // Resolve the symbol to display
         var symbol = (quickSymbol && quickSymbol.length > 0)
@@ -284,7 +288,7 @@ clientside_callback(
             var s = document.createElement("script");
             s.id  = "tv-script-tag";
             s.src = "https://s3.tradingview.com/tv.js";
-            s.onload = createWidget;
+            s.onload = function() { setTimeout(createWidget, 200); };
             document.head.appendChild(s);
         }
 
@@ -299,5 +303,6 @@ clientside_callback(
         Input("tv-chart-style",   "value"),
         Input("tv-studies",       "value"),
         Input("tv-theme",         "value"),
+        Input("tv-init-interval", "n_intervals"),
     ],
 )
