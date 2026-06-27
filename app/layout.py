@@ -11,7 +11,7 @@ from app.components import status_pill
 
 NAV_ITEMS = [
     {"id": "nav-dashboard",    "label": "Overview",    "page": "/"},
-    {"id": "nav-stock",        "label": "Stocks",      "page": "/stock"},
+    {"id": "nav-charts",       "label": "Charts",      "page": "/charts"},
     {"id": "nav-futures",      "label": "Futures",     "page": "/futures"},
     {"id": "nav-indicators",   "label": "Indicators",  "page": "/indicators"},
     {"id": "nav-strategy-lab", "label": "Strategies",  "page": "/strategy-lab"},

@@ -1152,3 +1152,149 @@ input[type="number"]:focus {
   line-height: 1.5;
   margin: 0;
 }
+
+/* ── Charts page — TradingView widget ──────────────────────────────────────── */
+
+.charts-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Controls bar */
+.tv-controls-bar {
+  padding: 16px 20px;
+}
+
+.tv-controls-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ctrl-group--symbol  { flex: 2 1 200px; }
+.ctrl-group--quick   { flex: 2 1 200px; }
+.ctrl-group--sm      { flex: 1 1 110px; }
+.ctrl-group--lg      { flex: 3 1 260px; }
+.ctrl-group--theme   { flex: 0 0 auto; }
+
+.ctrl-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--apple-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Symbol text input */
+.tv-symbol-input {
+  height: 36px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--apple-border-strong);
+  border-radius: var(--apple-radius-sm);
+  background: var(--apple-bg-elevated);
+  color: var(--apple-text);
+  font-family: var(--font-stack);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+
+.tv-symbol-input:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+
+/* Dropdowns — inherit Dash default styles; override sizing */
+.tv-dropdown .Select-control,
+.tv-dropdown--sm .Select-control,
+.tv-dropdown--lg .Select-control {
+  border-radius: var(--apple-radius-sm) !important;
+  border-color: var(--apple-border-strong) !important;
+  min-height: 36px !important;
+}
+
+/* Theme radio group */
+.tv-theme-toggle {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.tv-theme-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--apple-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Chart wrapper card */
+.tv-chart-wrapper {
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--apple-radius-lg);
+  min-height: 720px;
+}
+
+/* Inner container — TradingView fills this */
+.tv-chart-embed {
+  width: 100%;
+  height: 720px;
+  display: block;
+}
+
+.tv-chart-embed iframe {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Attribution */
+.tv-attribution {
+  padding: 0 4px 4px;
+}
+
+.tv-attribution-text {
+  font-size: 12px;
+  color: var(--apple-text-tertiary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.tv-attribution-link {
+  color: var(--apple-blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.tv-attribution-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .tv-controls-inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ctrl-group--symbol,
+  .ctrl-group--quick,
+  .ctrl-group--sm,
+  .ctrl-group--lg,
+  .ctrl-group--theme {
+    flex: 1 1 100%;
+  }
+  .tv-chart-embed { height: 560px; }
+  .tv-chart-wrapper { min-height: 560px; }
+}

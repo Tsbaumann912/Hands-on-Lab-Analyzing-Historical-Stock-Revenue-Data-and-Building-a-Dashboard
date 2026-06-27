@@ -1,19 +1,21 @@
 """Page modules for the QuantTerminal desktop application."""
 
 from app.pages import (
+    charts,
     dashboard,
-    stock_research,
     futures_terminal,
-    strategy_lab,
-    risk_console,
     indicator_explorer,
+    risk_console,
+    stock_research,
+    strategy_lab,
 )
 
 __all__ = [
+    "charts",
     "dashboard",
-    "stock_research",
     "futures_terminal",
-    "strategy_lab",
-    "risk_console",
     "indicator_explorer",
+    "risk_console",
+    "stock_research",
+    "strategy_lab",
 ]
