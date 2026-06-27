@@ -1283,6 +1283,146 @@ input[type="number"]:focus {
   text-decoration: underline;
 }
 
+/* Contract dropdown — wider than default sm */
+.ctrl-group--contract { flex: 3 1 280px; }
+.ctrl-group--btn      { flex: 0 0 auto; align-self: flex-end; }
+
+/* Futures refresh button */
+.fut-refresh-btn {
+  height: 36px;
+  padding: 0 18px;
+  background: var(--apple-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--apple-radius-sm);
+  font-family: var(--font-stack);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.fut-refresh-btn:hover  { background: var(--apple-blue-hover); }
+.fut-refresh-btn:active { transform: scale(0.97); }
+
+/* ── Futures Data — metrics row ─────────────────────────────────────────────── */
+.fut-metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.fut-metric-tile {
+  flex: 1 1 120px;
+  background: var(--apple-bg-elevated);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--apple-shadow-sm);
+}
+
+.fut-metric-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--apple-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fut-metric-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--apple-text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.fut-metric-sub {
+  font-size: 12px;
+  color: var(--apple-text-secondary);
+}
+
+/* ── Futures Data — coverage badge ──────────────────────────────────────────── */
+.fut-coverage-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 10px 14px;
+  background: var(--apple-bg);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.badge-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.badge-key {
+  font-weight: 600;
+  color: var(--apple-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.badge-val {
+  color: var(--apple-text-tertiary);
+}
+
+.badge-real  { color: var(--apple-blue) !important; }
+.badge-synth { color: var(--apple-orange) !important; }
+
+/* ── Charts page — mode tabs ─────────────────────────────────────────────────── */
+.charts-mode-tabs {
+  border-bottom: 1px solid var(--apple-border) !important;
+  margin-bottom: 4px;
+}
+
+.charts-mode-tabs .tab-container {
+  border: none !important;
+}
+
+.charts-mode-tab {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 10px 20px !important;
+  font-family: var(--font-stack) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--apple-text-secondary) !important;
+  cursor: pointer !important;
+  transition: color 0.15s, border-color 0.15s !important;
+}
+
+.charts-mode-tab:hover {
+  color: var(--apple-text) !important;
+}
+
+.charts-mode-tab--active {
+  color: var(--apple-blue) !important;
+  border-bottom-color: var(--apple-blue) !important;
+  font-weight: 600 !important;
+}
+
+/* Plotly chart within futures panel */
+.fut-chart-graph .js-plotly-plot {
+  border-radius: 0 !important;
+}
+
+/* Charts panel container */
+.charts-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 @media (max-width: 900px) {
   .tv-controls-inner {
     flex-direction: column;
@@ -1292,9 +1432,12 @@ input[type="number"]:focus {
   .ctrl-group--quick,
   .ctrl-group--sm,
   .ctrl-group--lg,
-  .ctrl-group--theme {
+  .ctrl-group--theme,
+  .ctrl-group--contract,
+  .ctrl-group--btn {
     flex: 1 1 100%;
   }
   .tv-chart-embed { height: 560px; }
   .tv-chart-wrapper { min-height: 560px; }
+  .fut-metric-tile { flex: 1 1 45%; }
 }

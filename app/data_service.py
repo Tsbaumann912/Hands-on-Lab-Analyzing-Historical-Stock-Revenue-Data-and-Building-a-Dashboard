@@ -513,6 +513,326 @@ def compute_indicators_for_ui(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     return result
 
 
+# ── Futures chart catalogue & data fetch ─────────────────────────────────────
+
+FUTURES_CHART_CATALOG: Dict[str, Dict[str, str]] = {
+    # Equity Index Futures
+    "ES=F":  {"name": "E-mini S&P 500",      "sector": "Index",  "exchange": "CME",   "label": "ES  — E-mini S&P 500"},
+    "NQ=F":  {"name": "E-mini Nasdaq-100",    "sector": "Index",  "exchange": "CME",   "label": "NQ  — E-mini Nasdaq-100"},
+    "YM=F":  {"name": "E-mini Dow Jones",     "sector": "Index",  "exchange": "CBOT",  "label": "YM  — E-mini Dow Jones"},
+    "RTY=F": {"name": "E-mini Russell 2000",  "sector": "Index",  "exchange": "CME",   "label": "RTY — E-mini Russell 2000"},
+    "MES=F": {"name": "Micro E-mini S&P 500", "sector": "Index",  "exchange": "CME",   "label": "MES — Micro E-mini S&P 500"},
+    "MNQ=F": {"name": "Micro E-mini Nasdaq",  "sector": "Index",  "exchange": "CME",   "label": "MNQ — Micro E-mini Nasdaq-100"},
+    # Energy Futures
+    "CL=F":  {"name": "Crude Oil WTI",        "sector": "Energy", "exchange": "NYMEX", "label": "CL  — Crude Oil WTI"},
+    "BZ=F":  {"name": "Brent Crude Oil",      "sector": "Energy", "exchange": "ICE",   "label": "BZ  — Brent Crude Oil"},
+    "NG=F":  {"name": "Natural Gas",          "sector": "Energy", "exchange": "NYMEX", "label": "NG  — Natural Gas"},
+    "HO=F":  {"name": "Heating Oil",          "sector": "Energy", "exchange": "NYMEX", "label": "HO  — Heating Oil"},
+    "RB=F":  {"name": "Gasoline RBOB",        "sector": "Energy", "exchange": "NYMEX", "label": "RB  — Gasoline RBOB"},
+    # Metals Futures
+    "GC=F":  {"name": "Gold",                 "sector": "Metals", "exchange": "COMEX", "label": "GC  — Gold"},
+    "SI=F":  {"name": "Silver",               "sector": "Metals", "exchange": "COMEX", "label": "SI  — Silver"},
+    "HG=F":  {"name": "Copper",               "sector": "Metals", "exchange": "COMEX", "label": "HG  — Copper"},
+    "PA=F":  {"name": "Palladium",            "sector": "Metals", "exchange": "NYMEX", "label": "PA  — Palladium"},
+    "PL=F":  {"name": "Platinum",             "sector": "Metals", "exchange": "NYMEX", "label": "PL  — Platinum"},
+    # Fixed Income Futures
+    "ZN=F":  {"name": "10-Year T-Note",       "sector": "Bonds",  "exchange": "CBOT",  "label": "ZN  — 10-Year T-Note"},
+    "ZB=F":  {"name": "30-Year T-Bond",       "sector": "Bonds",  "exchange": "CBOT",  "label": "ZB  — 30-Year T-Bond"},
+    "ZT=F":  {"name": "2-Year T-Note",        "sector": "Bonds",  "exchange": "CBOT",  "label": "ZT  — 2-Year T-Note"},
+    "ZF=F":  {"name": "5-Year T-Note",        "sector": "Bonds",  "exchange": "CBOT",  "label": "ZF  — 5-Year T-Note"},
+    # FX Futures
+    "6E=F":  {"name": "Euro FX",              "sector": "FX",     "exchange": "CME",   "label": "6E  — Euro FX  (EUR/USD)"},
+    "6J=F":  {"name": "Japanese Yen FX",      "sector": "FX",     "exchange": "CME",   "label": "6J  — Japanese Yen FX"},
+    "6B=F":  {"name": "British Pound FX",     "sector": "FX",     "exchange": "CME",   "label": "6B  — British Pound FX"},
+    "6C=F":  {"name": "Canadian Dollar FX",   "sector": "FX",     "exchange": "CME",   "label": "6C  — Canadian Dollar FX"},
+    "6A=F":  {"name": "Australian Dollar FX", "sector": "FX",     "exchange": "CME",   "label": "6A  — Australian Dollar FX"},
+    "6S=F":  {"name": "Swiss Franc FX",       "sector": "FX",     "exchange": "CME",   "label": "6S  — Swiss Franc FX"},
+    # Agricultural Futures
+    "ZC=F":  {"name": "Corn",                 "sector": "Ags",    "exchange": "CBOT",  "label": "ZC  — Corn"},
+    "ZS=F":  {"name": "Soybeans",             "sector": "Ags",    "exchange": "CBOT",  "label": "ZS  — Soybeans"},
+    "ZW=F":  {"name": "Wheat",                "sector": "Ags",    "exchange": "CBOT",  "label": "ZW  — Wheat"},
+    "LE=F":  {"name": "Live Cattle",          "sector": "Ags",    "exchange": "CME",   "label": "LE  — Live Cattle"},
+    "HE=F":  {"name": "Lean Hogs",            "sector": "Ags",    "exchange": "CME",   "label": "HE  — Lean Hogs"},
+    "KC=F":  {"name": "Coffee",               "sector": "Ags",    "exchange": "ICE",   "label": "KC  — Coffee"},
+    "SB=F":  {"name": "Sugar #11",            "sector": "Ags",    "exchange": "ICE",   "label": "SB  — Sugar #11"},
+    "CC=F":  {"name": "Cocoa",                "sector": "Ags",    "exchange": "ICE",   "label": "CC  — Cocoa"},
+    "CT=F":  {"name": "Cotton",               "sector": "Ags",    "exchange": "ICE",   "label": "CT  — Cotton"},
+    # Crypto Futures (CME)
+    "BTC=F": {"name": "Bitcoin Futures (CME)", "sector": "Crypto", "exchange": "CME",  "label": "BTC — Bitcoin Futures (CME)"},
+    "ETH=F": {"name": "Ethereum Futures (CME)","sector": "Crypto", "exchange": "CME",  "label": "ETH — Ethereum Futures (CME)"},
+}
+
+# ── Timeframe configuration ───────────────────────────────────────────────────
+#
+# max_real_days: how far back yfinance actually provides data at that interval.
+# interval_min:  bar size in minutes.
+# yf_interval:   the string passed to yf.download(interval=...).
+
+TIMEFRAME_CONFIG: Dict[str, Dict] = {
+    "1m":  {"yf_interval": "1m",  "max_real_days": 7,    "interval_min": 1},
+    "5m":  {"yf_interval": "5m",  "max_real_days": 60,   "interval_min": 5},
+    "15m": {"yf_interval": "15m", "max_real_days": 60,   "interval_min": 15},
+    "30m": {"yf_interval": "30m", "max_real_days": 60,   "interval_min": 30},
+    "1h":  {"yf_interval": "60m", "max_real_days": 730,  "interval_min": 60},
+    "4h":  {"yf_interval": "60m", "max_real_days": 730,  "interval_min": 240},
+    "1d":  {"yf_interval": "1d",  "max_real_days": None, "interval_min": 1440},
+}
+
+_SESSION_MINUTES = 1380   # 23-hour CME continuous futures session per day
+
+
+def _fetch_real_intraday(symbol: str, yf_interval: str) -> pd.DataFrame:
+    """Download the maximum available real intraday bars from yfinance."""
+    period_map = {"1m": "7d", "5m": "60d", "15m": "60d",
+                  "30m": "60d", "60m": "730d"}
+    period = period_map.get(yf_interval, "60d")
+
+    if not HAS_YF:
+        return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+
+    try:
+        raw = yf.download(
+            symbol, period=period, interval=yf_interval,
+            auto_adjust=True, progress=False, multi_level_index=False,
+        )
+        if raw is None or raw.empty:
+            return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+
+        frame = raw.reset_index()
+        date_col = "Datetime" if "Datetime" in frame.columns else "Date"
+        frame = frame.rename(columns={date_col: "Date"})
+        frame["Date"] = pd.to_datetime(frame["Date"]).dt.tz_localize(None)
+        needed = ["Date", "Open", "High", "Low", "Close", "Volume"]
+        frame = frame[[c for c in needed if c in frame.columns]]
+        frame = frame.dropna(subset=["Date", "Close"]).reset_index(drop=True)
+        if "Volume" not in frame.columns:
+            frame["Volume"] = 0
+        return frame
+
+    except Exception:
+        logger.warning("_fetch_real_intraday failed for %s / %s", symbol, yf_interval)
+        return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+
+
+def _resample_ohlcv_df(df: pd.DataFrame, interval_minutes: int) -> pd.DataFrame:
+    """Downsample an OHLCV DataFrame to a coarser bar size using pandas resample."""
+    if df.empty:
+        return df
+    df2 = df.set_index("Date").sort_index()
+    rule = f"{interval_minutes}min"
+    agg = df2.resample(rule).agg({
+        "Open":   "first",
+        "High":   "max",
+        "Low":    "min",
+        "Close":  "last",
+        "Volume": "sum",
+    }).dropna(subset=["Close"]).reset_index()
+    return agg
+
+
+def _resample_daily_to_intraday(
+    daily_df: pd.DataFrame,
+    interval_minutes: int,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """
+    Decompose daily OHLCV bars into synthetic intraday bars using vectorised GBM.
+
+    Each daily bar is split into bars_per_day = floor(SESSION_MINUTES / interval_minutes)
+    sub-bars.  Price paths satisfy the daily O/H/L/C constraints; volume is
+    distributed with a U-shaped profile (heavier at session open and close).
+
+    Returns a DataFrame with columns: Date, Open, High, Low, Close, Volume.
+    Timestamps start at 23:00 UTC (≈ 18:00 ET) on the trade date's eve,
+    matching the CME Globex open for continuous futures.
+    """
+    if daily_df.empty:
+        return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+
+    bars_per_day = max(1, _SESSION_MINUTES // interval_minutes)
+    n_days       = len(daily_df)
+    rng          = np.random.default_rng(seed)
+
+    opens   = daily_df["Open"].to_numpy(dtype=np.float64)
+    highs   = daily_df["High"].to_numpy(dtype=np.float64)
+    lows    = daily_df["Low"].to_numpy(dtype=np.float64)
+    closes  = daily_df["Close"].to_numpy(dtype=np.float64)
+    volumes = daily_df["Volume"].to_numpy(dtype=np.float64)
+
+    # ── Price path (n_days × bars_per_day) ────────────────────────────────
+    noise = rng.standard_normal((n_days, bars_per_day))
+    path  = np.cumsum(noise, axis=1)
+    path -= path[:, :1]                                    # anchor left end at 0
+
+    # Normalise to [0, 1]
+    p_min = path.min(axis=1, keepdims=True)
+    p_max = path.max(axis=1, keepdims=True)
+    span  = np.where(p_max > p_min, p_max - p_min, 1.0)
+    path  = (path - p_min) / span
+
+    # Steer right endpoint toward (close − low) / (high − low)
+    day_range  = np.where(highs > lows, highs - lows, highs * 1e-4)
+    target_end = np.clip((closes - lows) / day_range, 0.0, 1.0)
+    ramp       = np.linspace(0.0, 1.0, bars_per_day)[np.newaxis, :]
+    path       = path + ramp * (target_end[:, np.newaxis] - path[:, -1:])
+    path       = np.clip(path, 0.0, 1.0)
+
+    # Map to price space
+    prices = lows[:, np.newaxis] + path * day_range[:, np.newaxis]   # (n_days, bars_per_day)
+
+    # ── Bar OHLCV construction ─────────────────────────────────────────────
+    bar_c = prices
+    bar_o = np.empty_like(bar_c)
+    bar_o[:, 0]  = opens
+    bar_o[:, 1:] = bar_c[:, :-1]
+
+    # Small intraday wicks
+    body_h = np.abs(bar_c - bar_o) * 0.5
+    wick   = rng.uniform(0.001, 0.003, (n_days, bars_per_day)) * prices
+    bar_h  = np.minimum(np.maximum(bar_o, bar_c) + body_h + wick, highs[:, np.newaxis])
+    bar_l  = np.maximum(np.minimum(bar_o, bar_c) - body_h - wick, lows[:, np.newaxis])
+    bar_l  = np.minimum(bar_l, bar_h - 1e-8)   # guarantee H ≥ L
+
+    # U-shaped volume profile
+    idx      = np.arange(bars_per_day, dtype=np.float64)
+    decay    = bars_per_day * 0.15
+    u_weight = 1.0 + 2.5 * (np.exp(-idx / decay) + np.exp(-(bars_per_day - 1 - idx) / decay))
+    u_weight /= u_weight.sum()
+    v_noise  = rng.uniform(0.5, 1.5, (n_days, bars_per_day))
+    bar_v    = (volumes[:, np.newaxis] * u_weight[np.newaxis, :] * v_noise).astype(np.int64)
+
+    # ── Timestamps (fully vectorised, no Python loops) ─────────────────────
+    # Session open = 23:00 UTC on the calendar day preceding the trade date.
+    # Force datetime64[ns] resolution before calling view() so the int64
+    # values represent nanoseconds, not days or seconds.
+    date_ns = (
+        pd.to_datetime(daily_df["Date"])
+        .values
+        .astype("datetime64[ns]")
+        .view(np.int64)
+    )
+    sess_ns = date_ns - np.int64(1 * 3_600_000_000_000)   # −1 h → 23:00 UTC
+    ivl_ns  = np.int64(interval_minutes * 60_000_000_000)
+    bar_idx = np.arange(bars_per_day, dtype=np.int64)
+    ts_ns   = sess_ns[:, np.newaxis] + bar_idx[np.newaxis, :] * ivl_ns  # (n_days, bars_per_day)
+
+    return pd.DataFrame({
+        "Date":   pd.to_datetime(ts_ns.ravel()),
+        "Open":   bar_o.ravel().round(6),
+        "High":   bar_h.ravel().round(6),
+        "Low":    bar_l.ravel().round(6),
+        "Close":  bar_c.ravel().round(6),
+        "Volume": bar_v.ravel(),
+    })
+
+
+def fetch_futures_timeframe_data(
+    symbol: str,
+    timeframe: str = "1d",
+    start_year: int = 2000,
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Return a full-history OHLCV dataset for a futures contract at any timeframe.
+
+    Strategy
+    --------
+    1d  — Download real daily bars from ``start_year`` via yfinance (6 000+ bars).
+    4h  — Download real 1-hour bars (max 730 days) → resample to 4h;  for years
+          before the yfinance cutoff, resample the daily base.
+    1h  — Download real 1-hour bars (max 730 days); fill earlier with daily-based.
+    30m / 15m / 5m — Real sub-hourly bars (max 60 days); fill earlier with daily-based.
+    1m  — Real 1-minute bars (max 7 days); fill earlier with daily-based.
+
+    Parameters
+    ----------
+    symbol     : yfinance futures symbol, e.g. "ES=F", "CL=F"
+    timeframe  : one of "1m" "5m" "15m" "30m" "1h" "4h" "1d"
+    start_year : earliest year to include in the synthetic history
+
+    Returns
+    -------
+    (df, meta) where meta is a dict describing data coverage.
+    """
+    cfg          = TIMEFRAME_CONFIG.get(timeframe, TIMEFRAME_CONFIG["1d"])
+    interval_min = cfg["interval_min"]
+
+    # 1. Daily base — real data free from yfinance back to ~start_year
+    daily_df = _download_futures_history(symbol, start_year)
+    daily_df = daily_df.sort_values("Date").reset_index(drop=True)
+
+    _empty = pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+    if daily_df.empty:
+        return _empty, {"error": "no daily data available"}
+
+    if timeframe == "1d":
+        meta = {
+            "timeframe": "1d",
+            "real_bars": len(daily_df),
+            "synthetic_bars": 0,
+            "total_bars": len(daily_df),
+            "real_from": str(pd.to_datetime(daily_df["Date"].min()).date()),
+            "real_to":   str(pd.to_datetime(daily_df["Date"].max()).date()),
+            "source": "Yahoo Finance · real daily bars",
+        }
+        return daily_df, meta
+
+    # 2. Fetch maximum real intraday data from yfinance
+    real_intraday = _fetch_real_intraday(symbol, cfg["yf_interval"])
+
+    # For 4h: resample the 1h real data → 4h bars
+    if timeframe == "4h" and not real_intraday.empty:
+        real_intraday = _resample_ohlcv_df(real_intraday, 240)
+
+    # 3. Determine the boundary between real and synthetic data
+    if real_intraday.empty:
+        cutoff_date = pd.Timestamp.now()
+    else:
+        cutoff_date = pd.to_datetime(real_intraday["Date"].min())
+
+    # 4. Resample daily bars that pre-date the real-intraday window
+    daily_hist = daily_df[pd.to_datetime(daily_df["Date"]) < cutoff_date].copy()
+
+    if not daily_hist.empty:
+        synthetic = _resample_daily_to_intraday(daily_hist, interval_min, seed=42)
+    else:
+        synthetic = _empty.copy()
+
+    # 5. Stitch: synthetic history (old) + real intraday (recent)
+    combined = pd.concat([synthetic, real_intraday], ignore_index=True)
+    combined = (
+        combined
+        .sort_values("Date")
+        .drop_duplicates("Date")
+        .reset_index(drop=True)
+    )
+
+    synth_from = (str(daily_hist["Date"].min().date()) if not daily_hist.empty else "N/A")
+    synth_to   = str(cutoff_date.date())
+    real_from  = (str(pd.to_datetime(real_intraday["Date"].min()).date())
+                  if not real_intraday.empty else "N/A")
+    real_to    = (str(pd.to_datetime(real_intraday["Date"].max()).date())
+                  if not real_intraday.empty else "N/A")
+
+    meta = {
+        "timeframe":       timeframe,
+        "real_bars":       len(real_intraday),
+        "synthetic_bars":  len(synthetic),
+        "total_bars":      len(combined),
+        "real_from":       real_from,
+        "real_to":         real_to,
+        "synthetic_from":  synth_from,
+        "synthetic_to":    synth_to,
+        "source":          (
+            f"Real: {real_from} → {real_to} (yfinance {cfg['yf_interval']}) | "
+            f"Synthetic: {synth_from} → {synth_to} (daily-resampled)"
+        ),
+    }
+    return combined, meta
+
+
 # ── Synthetic fallbacks ───────────────────────────────────────────────────────
 
 def _synthetic_ohlcv(ticker: str, n: int = 500) -> pd.DataFrame:

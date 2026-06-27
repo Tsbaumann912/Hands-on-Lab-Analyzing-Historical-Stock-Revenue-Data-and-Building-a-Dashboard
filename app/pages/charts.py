@@ -1,9 +1,8 @@
 """
-Charts page — TradingView Advanced Chart widget integration.
+Charts page — TradingView Advanced Chart widget.
 
-Replaces the former Stocks page and gives users access to TradingView's
-full charting suite: 100+ indicators, all intervals, all asset classes,
-drawing tools, and more — no API key required (free TradingView widget).
+Provides access to TradingView's full charting suite: stocks, crypto,
+forex, indices, and more. Type any symbol or pick from the quick list.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 from dash import Input, Output, clientside_callback, dcc, html
 
 
-# ── Symbol catalogues ──────────────────────────────────────────────────────────
+# ── Symbol catalogue ──────────────────────────────────────────────────────────
 
 POPULAR_SYMBOLS: list[dict[str, str]] = [
     # Indices
@@ -30,13 +29,6 @@ POPULAR_SYMBOLS: list[dict[str, str]] = [
     {"label": "Meta (META)",          "value": "NASDAQ:META"},
     {"label": "Berkshire (BRK.B)",    "value": "NYSE:BRK.B"},
     {"label": "JPMorgan (JPM)",       "value": "NYSE:JPM"},
-    # Futures
-    {"label": "ES1! — S&P 500 Fut.", "value": "CME_MINI:ES1!"},
-    {"label": "NQ1! — Nasdaq Fut.",  "value": "CME_MINI:NQ1!"},
-    {"label": "CL1! — Crude Oil",    "value": "NYMEX:CL1!"},
-    {"label": "GC1! — Gold",         "value": "COMEX:GC1!"},
-    {"label": "SI1! — Silver",       "value": "COMEX:SI1!"},
-    {"label": "ZN1! — 10Y T-Note",  "value": "CBOT:ZN1!"},
     # Crypto
     {"label": "Bitcoin / USD",        "value": "BINANCE:BTCUSDT"},
     {"label": "Ethereum / USD",       "value": "BINANCE:ETHUSDT"},
@@ -63,32 +55,32 @@ INTERVALS: list[dict[str, str]] = [
 ]
 
 CHART_STYLES: list[dict[str, str]] = [
-    {"label": "Candlestick",      "value": "1"},
-    {"label": "Bars",             "value": "0"},
-    {"label": "Line",             "value": "2"},
-    {"label": "Area",             "value": "3"},
-    {"label": "Heikin Ashi",      "value": "8"},
-    {"label": "Hollow Candles",   "value": "9"},
-    {"label": "Baseline",         "value": "10"},
-    {"label": "Hi-Lo",            "value": "12"},
+    {"label": "Candlestick",    "value": "1"},
+    {"label": "Bars",           "value": "0"},
+    {"label": "Line",           "value": "2"},
+    {"label": "Area",           "value": "3"},
+    {"label": "Heikin Ashi",    "value": "8"},
+    {"label": "Hollow Candles", "value": "9"},
+    {"label": "Baseline",       "value": "10"},
+    {"label": "Hi-Lo",          "value": "12"},
 ]
 
 STUDIES: list[dict[str, str]] = [
-    {"label": "Volume",              "value": "Volume@tv-basicstudies"},
-    {"label": "RSI (14)",            "value": "RSI@tv-basicstudies"},
-    {"label": "MACD",                "value": "MACD@tv-basicstudies"},
-    {"label": "Bollinger Bands",     "value": "BB@tv-basicstudies"},
-    {"label": "EMA 20",              "value": "MAExp@tv-basicstudies"},
-    {"label": "VWAP",                "value": "VWAP@tv-basicstudies"},
-    {"label": "Stochastic",          "value": "Stoch@tv-basicstudies"},
-    {"label": "ATR",                 "value": "ATR@tv-basicstudies"},
-    {"label": "Ichimoku Cloud",      "value": "IchimokuCloud@tv-basicstudies"},
-    {"label": "Supertrend",          "value": "Supertrend@tv-basicstudies"},
-    {"label": "Parabolic SAR",       "value": "PSAR@tv-basicstudies"},
-    {"label": "CCI",                 "value": "CCI@tv-basicstudies"},
-    {"label": "Williams %R",         "value": "WilliamR@tv-basicstudies"},
-    {"label": "MFI",                 "value": "MFI@tv-basicstudies"},
-    {"label": "OBV",                 "value": "OBV@tv-basicstudies"},
+    {"label": "Volume",          "value": "Volume@tv-basicstudies"},
+    {"label": "RSI (14)",        "value": "RSI@tv-basicstudies"},
+    {"label": "MACD",            "value": "MACD@tv-basicstudies"},
+    {"label": "Bollinger Bands", "value": "BB@tv-basicstudies"},
+    {"label": "EMA 20",          "value": "MAExp@tv-basicstudies"},
+    {"label": "VWAP",            "value": "VWAP@tv-basicstudies"},
+    {"label": "Stochastic",      "value": "Stoch@tv-basicstudies"},
+    {"label": "ATR",             "value": "ATR@tv-basicstudies"},
+    {"label": "Ichimoku Cloud",  "value": "IchimokuCloud@tv-basicstudies"},
+    {"label": "Supertrend",      "value": "Supertrend@tv-basicstudies"},
+    {"label": "Parabolic SAR",   "value": "PSAR@tv-basicstudies"},
+    {"label": "CCI",             "value": "CCI@tv-basicstudies"},
+    {"label": "Williams %R",     "value": "WilliamR@tv-basicstudies"},
+    {"label": "MFI",             "value": "MFI@tv-basicstudies"},
+    {"label": "OBV",             "value": "OBV@tv-basicstudies"},
 ]
 
 
@@ -96,6 +88,7 @@ STUDIES: list[dict[str, str]] = [
 
 def layout() -> html.Div:
     return html.Div([
+
         # ── Page header ────────────────────────────────────────────────────────
         html.Div([
             html.Div([
@@ -112,7 +105,6 @@ def layout() -> html.Div:
         html.Div([
             html.Div([
 
-                # Symbol text input
                 html.Div([
                     html.Label("Symbol", className="ctrl-label"),
                     dcc.Input(
@@ -125,7 +117,6 @@ def layout() -> html.Div:
                     ),
                 ], className="ctrl-group ctrl-group--symbol"),
 
-                # Quick-pick dropdown
                 html.Div([
                     html.Label("Quick Pick", className="ctrl-label"),
                     dcc.Dropdown(
@@ -137,7 +128,6 @@ def layout() -> html.Div:
                     ),
                 ], className="ctrl-group ctrl-group--quick"),
 
-                # Interval
                 html.Div([
                     html.Label("Interval", className="ctrl-label"),
                     dcc.Dropdown(
@@ -149,7 +139,6 @@ def layout() -> html.Div:
                     ),
                 ], className="ctrl-group ctrl-group--sm"),
 
-                # Chart style
                 html.Div([
                     html.Label("Style", className="ctrl-label"),
                     dcc.Dropdown(
@@ -161,7 +150,6 @@ def layout() -> html.Div:
                     ),
                 ], className="ctrl-group ctrl-group--sm"),
 
-                # Indicators / studies (multi-select)
                 html.Div([
                     html.Label("Indicators", className="ctrl-label"),
                     dcc.Dropdown(
@@ -174,7 +162,6 @@ def layout() -> html.Div:
                     ),
                 ], className="ctrl-group ctrl-group--lg"),
 
-                # Theme toggle
                 html.Div([
                     html.Label("Theme", className="ctrl-label"),
                     dcc.RadioItems(
@@ -202,7 +189,7 @@ def layout() -> html.Div:
             ),
         ], className="tv-chart-wrapper section-card"),
 
-        # ── Attribution note ───────────────────────────────────────────────────
+        # ── Attribution ────────────────────────────────────────────────────────
         html.Div([
             html.P([
                 "Charts powered by ",
@@ -218,80 +205,64 @@ def layout() -> html.Div:
             ], className="tv-attribution-text"),
         ], className="tv-attribution"),
 
-        # Hidden sink for clientside callback return value
+        # Hidden sink + one-shot init interval
         html.Div(id="tv-widget-sink", style={"display": "none"}),
-
-        # One-shot interval fires 800 ms after page load to ensure the widget
-        # initialises even if the first callback ran before the DOM was ready.
         dcc.Interval(id="tv-init-interval", interval=800, max_intervals=1),
 
     ], className="page-content charts-page")
 
 
-# ── Clientside callback — initialise / update the TradingView widget ──────────
-#
-# The TradingView free widget is loaded from TradingView's CDN (tv.js).
-# We destroy the old instance and recreate it whenever any control changes.
-# This runs entirely in the browser — no server round-trip needed.
+# ── Clientside callback — initialise / update TradingView widget ──────────────
 
 clientside_callback(
     """
     function(symbolInput, quickSymbol, interval, chartStyle, studies, theme, _tick) {
 
-        // Resolve the symbol to display
         var symbol = (quickSymbol && quickSymbol.length > 0)
-                     ? quickSymbol
-                     : (symbolInput || "NASDAQ:AAPL");
+                     ? quickSymbol : (symbolInput || "NASDAQ:AAPL");
+        var studies = studies || [];
+        var theme   = theme   || "dark";
+        var bg      = theme === "dark" ? "#131722" : "#ffffff";
 
-        var studiesArr = studies || [];
-        var themeVal   = theme || "dark";
-        var bgColor    = themeVal === "dark" ? "#131722" : "#ffffff";
-
-        var config = {
-            container_id:       "tradingview-chart",
-            autosize:           true,
-            symbol:             symbol,
-            interval:           interval || "D",
-            timezone:           "Etc/UTC",
-            theme:              themeVal,
-            style:              chartStyle || "1",
-            locale:             "en",
-            toolbar_bg:         bgColor,
-            enable_publishing:  false,
+        var cfg = {
+            container_id:        "tradingview-chart",
+            autosize:            true,
+            symbol:              symbol,
+            interval:            interval || "D",
+            timezone:            "Etc/UTC",
+            theme:               theme,
+            style:               chartStyle || "1",
+            locale:              "en",
+            toolbar_bg:          bg,
+            enable_publishing:   false,
             allow_symbol_change: true,
-            studies:            studiesArr,
-            show_popup_button:  true,
-            popup_width:        "1200",
-            popup_height:       "700",
-            save_image:         true,
-            hide_side_toolbar:  false,
-            withdateranges:     true,
-            details:            false,
-            hotlist:            false,
-            calendar:           false
+            studies:             studies,
+            show_popup_button:   true,
+            popup_width:         "1200",
+            popup_height:        "700",
+            save_image:          true,
+            hide_side_toolbar:   false,
+            withdateranges:      true,
         };
 
-        function createWidget() {
-            var container = document.getElementById("tradingview-chart");
-            if (!container) { return; }
-            container.innerHTML = "";
-            if (window.TradingView) {
-                new window.TradingView.widget(config);
-            }
+        function buildWidget() {
+            var el = document.getElementById("tradingview-chart");
+            if (!el) { return; }
+            el.innerHTML = "";
+            if (window.TradingView) { new window.TradingView.widget(cfg); }
         }
 
         if (window.TradingView) {
-            createWidget();
+            buildWidget();
         } else {
-            var existing = document.getElementById("tv-script-tag");
-            if (existing) { existing.remove(); }
-            var s = document.createElement("script");
-            s.id  = "tv-script-tag";
-            s.src = "https://s3.tradingview.com/tv.js";
-            s.onload = function() { setTimeout(createWidget, 200); };
+            var old = document.getElementById("tv-script-tag");
+            if (old) { old.remove(); }
+            var s   = document.createElement("script");
+            s.id    = "tv-script-tag";
+            s.src   = "https://s3.tradingview.com/tv.js";
+            s.onload = function() { setTimeout(buildWidget, 200); };
             document.head.appendChild(s);
         }
-
         return "";
     }
     """,
