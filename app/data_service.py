@@ -513,6 +513,111 @@ def compute_indicators_for_ui(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     return result
 
 
+# ── Futures chart catalogue & data fetch ─────────────────────────────────────
+
+FUTURES_CHART_CATALOG: Dict[str, Dict[str, str]] = {
+    # Equity Index Futures
+    "ES=F":  {"name": "E-mini S&P 500",      "sector": "Index",  "exchange": "CME",   "label": "ES  — E-mini S&P 500"},
+    "NQ=F":  {"name": "E-mini Nasdaq-100",    "sector": "Index",  "exchange": "CME",   "label": "NQ  — E-mini Nasdaq-100"},
+    "YM=F":  {"name": "E-mini Dow Jones",     "sector": "Index",  "exchange": "CBOT",  "label": "YM  — E-mini Dow Jones"},
+    "RTY=F": {"name": "E-mini Russell 2000",  "sector": "Index",  "exchange": "CME",   "label": "RTY — E-mini Russell 2000"},
+    "MES=F": {"name": "Micro E-mini S&P 500", "sector": "Index",  "exchange": "CME",   "label": "MES — Micro E-mini S&P 500"},
+    "MNQ=F": {"name": "Micro E-mini Nasdaq",  "sector": "Index",  "exchange": "CME",   "label": "MNQ — Micro E-mini Nasdaq-100"},
+    # Energy Futures
+    "CL=F":  {"name": "Crude Oil WTI",        "sector": "Energy", "exchange": "NYMEX", "label": "CL  — Crude Oil WTI"},
+    "BZ=F":  {"name": "Brent Crude Oil",      "sector": "Energy", "exchange": "ICE",   "label": "BZ  — Brent Crude Oil"},
+    "NG=F":  {"name": "Natural Gas",          "sector": "Energy", "exchange": "NYMEX", "label": "NG  — Natural Gas"},
+    "HO=F":  {"name": "Heating Oil",          "sector": "Energy", "exchange": "NYMEX", "label": "HO  — Heating Oil"},
+    "RB=F":  {"name": "Gasoline RBOB",        "sector": "Energy", "exchange": "NYMEX", "label": "RB  — Gasoline RBOB"},
+    # Metals Futures
+    "GC=F":  {"name": "Gold",                 "sector": "Metals", "exchange": "COMEX", "label": "GC  — Gold"},
+    "SI=F":  {"name": "Silver",               "sector": "Metals", "exchange": "COMEX", "label": "SI  — Silver"},
+    "HG=F":  {"name": "Copper",               "sector": "Metals", "exchange": "COMEX", "label": "HG  — Copper"},
+    "PA=F":  {"name": "Palladium",            "sector": "Metals", "exchange": "NYMEX", "label": "PA  — Palladium"},
+    "PL=F":  {"name": "Platinum",             "sector": "Metals", "exchange": "NYMEX", "label": "PL  — Platinum"},
+    # Fixed Income Futures
+    "ZN=F":  {"name": "10-Year T-Note",       "sector": "Bonds",  "exchange": "CBOT",  "label": "ZN  — 10-Year T-Note"},
+    "ZB=F":  {"name": "30-Year T-Bond",       "sector": "Bonds",  "exchange": "CBOT",  "label": "ZB  — 30-Year T-Bond"},
+    "ZT=F":  {"name": "2-Year T-Note",        "sector": "Bonds",  "exchange": "CBOT",  "label": "ZT  — 2-Year T-Note"},
+    "ZF=F":  {"name": "5-Year T-Note",        "sector": "Bonds",  "exchange": "CBOT",  "label": "ZF  — 5-Year T-Note"},
+    # FX Futures
+    "6E=F":  {"name": "Euro FX",              "sector": "FX",     "exchange": "CME",   "label": "6E  — Euro FX  (EUR/USD)"},
+    "6J=F":  {"name": "Japanese Yen FX",      "sector": "FX",     "exchange": "CME",   "label": "6J  — Japanese Yen FX"},
+    "6B=F":  {"name": "British Pound FX",     "sector": "FX",     "exchange": "CME",   "label": "6B  — British Pound FX"},
+    "6C=F":  {"name": "Canadian Dollar FX",   "sector": "FX",     "exchange": "CME",   "label": "6C  — Canadian Dollar FX"},
+    "6A=F":  {"name": "Australian Dollar FX", "sector": "FX",     "exchange": "CME",   "label": "6A  — Australian Dollar FX"},
+    "6S=F":  {"name": "Swiss Franc FX",       "sector": "FX",     "exchange": "CME",   "label": "6S  — Swiss Franc FX"},
+    # Agricultural Futures
+    "ZC=F":  {"name": "Corn",                 "sector": "Ags",    "exchange": "CBOT",  "label": "ZC  — Corn"},
+    "ZS=F":  {"name": "Soybeans",             "sector": "Ags",    "exchange": "CBOT",  "label": "ZS  — Soybeans"},
+    "ZW=F":  {"name": "Wheat",                "sector": "Ags",    "exchange": "CBOT",  "label": "ZW  — Wheat"},
+    "LE=F":  {"name": "Live Cattle",          "sector": "Ags",    "exchange": "CME",   "label": "LE  — Live Cattle"},
+    "HE=F":  {"name": "Lean Hogs",            "sector": "Ags",    "exchange": "CME",   "label": "HE  — Lean Hogs"},
+    "KC=F":  {"name": "Coffee",               "sector": "Ags",    "exchange": "ICE",   "label": "KC  — Coffee"},
+    "SB=F":  {"name": "Sugar #11",            "sector": "Ags",    "exchange": "ICE",   "label": "SB  — Sugar #11"},
+    "CC=F":  {"name": "Cocoa",                "sector": "Ags",    "exchange": "ICE",   "label": "CC  — Cocoa"},
+    "CT=F":  {"name": "Cotton",               "sector": "Ags",    "exchange": "ICE",   "label": "CT  — Cotton"},
+    # Crypto Futures (CME)
+    "BTC=F": {"name": "Bitcoin Futures (CME)", "sector": "Crypto", "exchange": "CME",  "label": "BTC — Bitcoin Futures (CME)"},
+    "ETH=F": {"name": "Ethereum Futures (CME)","sector": "Crypto", "exchange": "CME",  "label": "ETH — Ethereum Futures (CME)"},
+}
+
+_PERIOD_CFG: Dict[str, Dict[str, str]] = {
+    "1mo":  {"period": "1mo",  "interval": "1h"},
+    "3mo":  {"period": "3mo",  "interval": "1d"},
+    "6mo":  {"period": "6mo",  "interval": "1d"},
+    "1y":   {"period": "1y",   "interval": "1d"},
+    "2y":   {"period": "2y",   "interval": "1d"},
+    "5y":   {"period": "5y",   "interval": "1wk"},
+    "max":  {"period": "max",  "interval": "1wk"},
+}
+
+
+def fetch_futures_chart_data(symbol: str, period: str = "1y") -> pd.DataFrame:
+    """
+    Fetch OHLCV bars for a futures continuous contract via yfinance.
+
+    symbol: yfinance futures symbol, e.g. "ES=F", "CL=F", "GC=F"
+    period: one of "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y" | "max"
+
+    Returns a DataFrame with columns: Date, Open, High, Low, Close, Volume.
+    Falls back to synthetic data on any error so the chart never crashes.
+    """
+    if not HAS_YF:
+        return _synthetic_ohlcv(symbol, 252)
+
+    cfg = _PERIOD_CFG.get(period, _PERIOD_CFG["1y"])
+    try:
+        raw = yf.download(
+            symbol,
+            period=cfg["period"],
+            interval=cfg["interval"],
+            auto_adjust=True,
+            progress=False,
+            multi_level_index=False,
+        )
+        if raw is None or raw.empty:
+            raise ValueError("empty result from yfinance")
+
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+
+        frame = raw.reset_index()
+        date_col = "Datetime" if "Datetime" in frame.columns else "Date"
+        frame = frame.rename(columns={date_col: "Date"})
+        frame["Date"] = pd.to_datetime(frame["Date"]).dt.tz_localize(None)
+        needed = ["Date", "Open", "High", "Low", "Close", "Volume"]
+        available = [c for c in needed if c in frame.columns]
+        frame = frame[available].dropna(subset=["Date", "Close"]).reset_index(drop=True)
+        if "Volume" not in frame.columns:
+            frame["Volume"] = 0
+        return frame
+
+    except Exception:
+        logger.warning("fetch_futures_chart_data failed for %s / %s; using synthetic.", symbol, period)
+        return _synthetic_ohlcv(symbol, 252)
+
+
 # ── Synthetic fallbacks ───────────────────────────────────────────────────────
 
 def _synthetic_ohlcv(ticker: str, n: int = 500) -> pd.DataFrame:
