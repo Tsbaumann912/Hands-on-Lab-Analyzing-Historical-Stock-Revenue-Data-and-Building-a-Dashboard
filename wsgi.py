@@ -37,12 +37,13 @@ from app.api.market_intelligence_routes import market_intel_bp
 
 # Import page modules (they register their own callbacks via @callback)
 from app.pages import (
+    charts,
     dashboard,
-    stock_research,
     futures_terminal,
-    strategy_lab,
-    risk_console,
     indicator_explorer,
+    risk_console,
+    stock_research,
+    strategy_lab,
 )
 
 # ── Initialise Dash app ───────────────────────────────────────────────────────
@@ -214,7 +215,8 @@ application.layout = root_layout()
 
 PAGE_MAP = {
     "/":            dashboard.layout,
-    "/stock":       stock_research.layout,
+    "/charts":      charts.layout,
+    "/stock":       stock_research.layout,   # legacy redirect kept for bookmarks
     "/futures":     futures_terminal.layout,
     "/indicators":  indicator_explorer.layout,
     "/strategy-lab":strategy_lab.layout,
