@@ -95,6 +95,47 @@ class BacktestConfig:
 
 
 @dataclass
+class AnalysisConfig:
+    """Tuneable bounds for the Strategies-tab analysis workspace."""
+
+    history_start_date: str = "2000-01-01"
+    default_timeframe: str = "1d"
+    default_data_source: str = "auto"
+    max_backtest_bars: int = 60_000
+    max_optimize_bars: int = 30_000
+    grid_steps_per_param: int = 4
+    max_grid_combinations: int = 96
+    objective_metric: str = "sharpe_ratio"
+    objective_metrics: List[str] = field(
+        default_factory=lambda: [
+            "sharpe_ratio",
+            "sortino_ratio",
+            "calmar_ratio",
+            "total_return",
+            "profit_factor",
+        ]
+    )
+    walk_forward_windows: int = 4
+    in_sample_ratio: float = 0.70
+    walk_forward_trials: int = 25
+    walk_forward_timeout_seconds: int = 90
+
+
+@dataclass
+class ContractSpec:
+    """CME futures contract economics used for notional P&L accounting."""
+
+    symbol: str
+    name: str
+    yfinance_ticker: str
+    contract_multiplier: float = 50.0
+    tick_size: float = 0.25
+    tick_value: float = 12.50
+    commission_per_contract: float = 2.25
+    synthetic_start_price: float = 4500.0
+
+
+@dataclass
 class MarketIntelligenceAssetConfig:
     symbol: str
     label: str
@@ -119,12 +160,22 @@ class Config:
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    contracts: Dict[str, ContractSpec] = field(default_factory=dict)
     market_intelligence: MarketIntelligenceConfig = field(
         default_factory=MarketIntelligenceConfig
     )
     log_level: str = "INFO"
 
     # ── Factory methods ───────────────────────────────────────────────────────
+
+    @classmethod
+    def _parse_contracts(cls, raw: Dict[str, Any]) -> Dict[str, ContractSpec]:
+        contracts_raw = raw.get("contracts", {}) or {}
+        specs: Dict[str, ContractSpec] = {}
+        for symbol, spec in contracts_raw.items():
+            specs[symbol] = ContractSpec(symbol=symbol, **spec)
+        return specs
 
     @classmethod
     def _parse_market_intelligence(cls, raw: Dict[str, Any]) -> MarketIntelligenceConfig:
@@ -159,6 +210,8 @@ class Config:
             portfolio=PortfolioConfig(**raw.get("portfolio", {})),
             broker=BrokerConfig(**raw.get("broker", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
+            analysis=AnalysisConfig(**raw.get("analysis", {})),
+            contracts=cls._parse_contracts(raw),
             market_intelligence=cls._parse_market_intelligence(raw),
             log_level=raw.get("log_level", "INFO"),
         )
