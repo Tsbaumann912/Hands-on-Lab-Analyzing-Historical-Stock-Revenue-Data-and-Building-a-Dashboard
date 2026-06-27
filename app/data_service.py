@@ -7,17 +7,22 @@ All methods are cached for the session to avoid redundant API calls.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Ensure the workspace root is importable for the quant-stack modules below.
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
     import yfinance as yf
@@ -384,55 +389,30 @@ def run_backtest_for_ui(
     n_bars: int = 500,
 ) -> Dict:
     """
-    Run a full backtest using the quant terminal engine and return a results dict.
-    """
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    Run a synthetic-data backtest and return a results dict.
 
-    from core.config import Config
-    from core.enums import AssetClass
-    from core.models import Bar
+    Retained for the Futures/Indicator/Risk pages; the Strategies tab now uses
+    :func:`run_strategy_analysis` for full historical-data backtesting.
+    """
     from engine.backtest import BacktestEngine
     from strategies.mean_reversion import MeanReversionRSI
-    from strategies.momentum import MomentumBreakout
-    from strategies.trend_following import TrendFollowingMACD
 
-    strategy_map = {
-        "MeanReversionRSI":    MeanReversionRSI,
-        "MomentumBreakout":    MomentumBreakout,
-        "TrendFollowingMACD":  TrendFollowingMACD,
-    }
-
-    config = Config()
+    config = _load_analysis_config()
     config.portfolio.initial_cash = initial_cash
     config.indicators.rsi_period = rsi_period
     config.strategy.rsi_oversold = rsi_oversold
     config.strategy.rsi_overbought = rsi_overbought
     config.indicators.bb_period = bb_period
+    _apply_contract_spec(config, symbol)
 
     df = get_synthetic_futures_bars(symbol, n=n_bars)
     sym = f"{symbol}.c.0"
+    bars = _dataframe_to_bars(df, sym, config.portfolio.contract_multiplier)
 
-    bars = [
-        Bar(
-            symbol=sym,
-            timestamp=row["Date"].to_pydatetime().replace(tzinfo=timezone.utc),
-            open=float(row["Open"]),
-            high=float(row["High"]),
-            low=float(row["Low"]),
-            close=float(row["Close"]),
-            volume=float(row["Volume"]),
-            asset_class=AssetClass.FUTURES,
-        )
-        for _, row in df.iterrows()
-    ]
-
-    cls = strategy_map.get(strategy_name, MeanReversionRSI)
+    cls = STRATEGY_REGISTRY.get(strategy_name, MeanReversionRSI)
     engine = BacktestEngine(config, cls)
     result = engine.run({sym: bars})
 
-    # Build equity curve DataFrame — always use price bar dates for alignment
     n_eq = len(result.equity_curve)
     if n_eq > 0:
         dates_for_eq = df["Date"].iloc[:n_eq].reset_index(drop=True)
@@ -448,6 +428,478 @@ def run_backtest_for_ui(
         "equity_curve": eq_df,
         "fills":        result.fills,
         "price_df":     df,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ── Strategies tab — historical analysis (backtest / optimize / walk-forward)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_ANALYSIS_CONFIG = None       # lazy-loaded Config
+_STRATEGY_REGISTRY_CACHE = None
+
+
+def _load_analysis_config():
+    """Load the YAML-backed Config once (falls back to dataclass defaults)."""
+    global _ANALYSIS_CONFIG
+    from core.config import Config
+
+    root = os.path.dirname(os.path.dirname(__file__))
+    cfg_path = os.path.join(root, "config", "default.yaml")
+    try:
+        _ANALYSIS_CONFIG = Config.from_yaml(cfg_path)
+    except Exception:
+        logger.warning("Config.from_yaml failed; using defaults.", exc_info=True)
+        _ANALYSIS_CONFIG = Config()
+    return _ANALYSIS_CONFIG
+
+
+def get_analysis_config():
+    """Public accessor for the loaded analysis Config."""
+    if _ANALYSIS_CONFIG is None:
+        return _load_analysis_config()
+    return _ANALYSIS_CONFIG
+
+
+def _strategy_registry() -> Dict[str, Any]:
+    global _STRATEGY_REGISTRY_CACHE
+    if _STRATEGY_REGISTRY_CACHE is None:
+        from strategies.mean_reversion import MeanReversionRSI
+        from strategies.momentum import MomentumBreakout
+        from strategies.trend_following import TrendFollowingMACD
+
+        _STRATEGY_REGISTRY_CACHE = {
+            "MeanReversionRSI":   MeanReversionRSI,
+            "MomentumBreakout":   MomentumBreakout,
+            "TrendFollowingMACD": TrendFollowingMACD,
+        }
+    return _STRATEGY_REGISTRY_CACHE
+
+
+class _LazyRegistry(dict):
+    """Dict that populates strategy classes on first access."""
+
+    def get(self, key, default=None):  # type: ignore[override]
+        return _strategy_registry().get(key, default)
+
+    def __getitem__(self, key):  # type: ignore[override]
+        return _strategy_registry()[key]
+
+    def __contains__(self, key) -> bool:  # type: ignore[override]
+        return key in _strategy_registry()
+
+
+STRATEGY_REGISTRY = _LazyRegistry()
+
+
+def _contract_yahoo_symbol(symbol: str) -> str:
+    cfg = get_analysis_config()
+    spec = cfg.contracts.get(symbol)
+    if spec is not None:
+        return spec.yfinance_ticker
+    asset = FUTURES_ASSET_CONFIG.get(symbol)
+    if asset is not None:
+        return asset["yahoo_symbol"]
+    return f"{symbol}=F"
+
+
+def _apply_contract_spec(config, symbol: str) -> None:
+    """Inject per-contract economics into ``config.portfolio`` for notional P&L."""
+    spec = config.contracts.get(symbol)
+    if spec is None:
+        return
+    config.portfolio.contract_multiplier = spec.contract_multiplier
+    config.portfolio.tick_size = spec.tick_size
+    config.portfolio.tick_value = spec.tick_value
+    config.portfolio.commission_per_contract = spec.commission_per_contract
+
+
+def _dataframe_to_bars(df: pd.DataFrame, symbol: str, multiplier: float) -> list:
+    from data.ticks import ohlcv_dataframe_to_bars
+
+    return ohlcv_dataframe_to_bars(df, symbol, multiplier)
+
+
+def load_futures_bars_for_ui(
+    symbol: str,
+    timeframe: str = "1d",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    data_source: str = "auto",
+    max_bars: int = 60_000,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Return an OHLCV DataFrame (``Date, Open, High, Low, Close, Volume``) for a
+    futures contract over [start_date, end_date] at *timeframe*, plus a coverage
+    metadata dict.
+
+    Data-source resolution
+    -----------------------
+    ``databento``   — real CME tick/OHLCV via :class:`DatabentoHistoricalClient`
+                      (requires ``DATABENTO_API_KEY``); ticks are aggregated to
+                      bars when a tick schema is returned.
+    ``historical``  — yfinance real daily bars back to ~2000, with synthetic
+                      intraday fill for sub-daily timeframes (no API key needed).
+    ``synthetic``   — fully synthetic GBM series spanning the requested range.
+    ``auto``        — Databento when a key is present, else ``historical``.
+    """
+    cfg = get_analysis_config()
+    start_date = start_date or cfg.analysis.history_start_date
+    yahoo_symbol = _contract_yahoo_symbol(symbol)
+    resolved = _resolve_data_source(data_source)
+
+    meta: Dict[str, Any]
+    if resolved == "databento":
+        df, meta = _load_databento_bars(symbol, timeframe, start_date, end_date)
+        if df.empty:
+            logger.warning("Databento returned no data; falling back to historical.")
+            resolved = "historical"
+
+    if resolved == "historical":
+        start_year = _year_of(start_date, cfg.analysis.history_start_date)
+        df, meta = fetch_futures_timeframe_data(yahoo_symbol, timeframe, start_year)
+    elif resolved == "synthetic":
+        df, meta = _synthetic_range_bars(symbol, timeframe, start_date, end_date)
+
+    df = _filter_date_range(df, start_date, end_date)
+
+    if len(df) > max_bars:
+        df = df.tail(max_bars).reset_index(drop=True)
+        meta["bar_cap_applied"] = max_bars
+
+    meta["data_source"] = resolved
+    meta["symbol"] = symbol
+    meta["yahoo_symbol"] = yahoo_symbol
+    meta["bars_used"] = len(df)
+    if not df.empty:
+        meta["range_from"] = str(pd.to_datetime(df["Date"].iloc[0]).date())
+        meta["range_to"] = str(pd.to_datetime(df["Date"].iloc[-1]).date())
+    return df, meta
+
+
+def _resolve_data_source(data_source: str) -> str:
+    source = (data_source or "auto").lower()
+    if source == "auto":
+        return "databento" if os.getenv("DATABENTO_API_KEY") else "historical"
+    return source
+
+
+def _year_of(value: Optional[str], fallback: str) -> int:
+    for candidate in (value, fallback, "2000-01-01"):
+        if candidate:
+            try:
+                return pd.to_datetime(candidate).year
+            except Exception:
+                continue
+    return 2000
+
+
+def _filter_date_range(
+    df: pd.DataFrame, start_date: Optional[str], end_date: Optional[str]
+) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    dates = pd.to_datetime(df["Date"])
+    mask = np.ones(len(df), dtype=bool)
+    if start_date:
+        mask &= (dates >= pd.to_datetime(start_date)).to_numpy()
+    if end_date:
+        mask &= (dates <= pd.to_datetime(end_date)).to_numpy()
+    return df.loc[mask].reset_index(drop=True)
+
+
+def _load_databento_bars(
+    symbol: str, timeframe: str, start_date: str, end_date: Optional[str]
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Fetch real CME data from Databento, aggregating ticks to bars if needed."""
+    empty = pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+    try:
+        from data.historical import DatabentoHistoricalClient, HAS_DATABENTO
+        from data.ticks import ticks_to_ohlcv
+
+        if not HAS_DATABENTO:
+            return empty, {"error": "databento sdk not installed"}
+
+        cfg = get_analysis_config()
+        client = DatabentoHistoricalClient(cache_dir=cfg.data.cache_dir)
+        end = end_date or str(date.today())
+        schema = cfg.data.schema
+        cont_symbol = f"{symbol}.c.0"
+        raw = client.fetch_bars(
+            dataset=cfg.data.dataset,
+            symbols=[cont_symbol],
+            schema=schema,
+            start=start_date,
+            end=end,
+        )
+        frame = raw.to_pandas() if hasattr(raw, "to_pandas") else pd.DataFrame(raw)
+        if frame.empty:
+            return empty, {"error": "no databento rows"}
+
+        if {"open", "high", "low", "close"}.issubset(frame.columns):
+            frame = frame.reset_index().rename(columns={
+                "ts_event": "Date", "open": "Open", "high": "High",
+                "low": "Low", "close": "Close", "volume": "Volume",
+            })
+            cols = ["Date", "Open", "High", "Low", "Close", "Volume"]
+            df = frame[[c for c in cols if c in frame.columns]].dropna()
+        else:
+            price_col = "price" if "price" in frame.columns else "close"
+            frame = frame.reset_index().rename(columns={"ts_event": "timestamp"})
+            df = ticks_to_ohlcv(frame, timeframe, price_col=price_col)
+
+        return df, {
+            "source": f"Databento {cfg.data.dataset} {schema}",
+            "real_bars": len(df),
+            "synthetic_bars": 0,
+        }
+    except Exception:
+        logger.warning("Databento fetch failed for %s.", symbol, exc_info=True)
+        return empty, {"error": "databento fetch failed"}
+
+
+def _synthetic_range_bars(
+    symbol: str, timeframe: str, start_date: str, end_date: Optional[str]
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Generate a synthetic OHLCV series spanning the requested date range."""
+    cfg = get_analysis_config()
+    spec = cfg.contracts.get(symbol)
+    start_price = spec.synthetic_start_price if spec else 4500.0
+
+    start_ts = pd.to_datetime(start_date)
+    end_ts = pd.to_datetime(end_date) if end_date else pd.Timestamp.now()
+    freq_map = {"1d": "B", "4h": "4h", "1h": "h", "30m": "30min",
+                "15m": "15min", "5m": "5min", "1m": "min"}
+    freq = freq_map.get(timeframe, "B")
+    dates = pd.date_range(start_ts, end_ts, freq=freq)
+    n = len(dates)
+    if n < 2:
+        return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"]), {}
+
+    df = get_synthetic_futures_bars(
+        symbol=symbol, n=n, start_price=start_price,
+        volatility=max(0.5, start_price * 0.012),
+        seed=sum(ord(c) for c in symbol),
+    )
+    df = df.copy()
+    df["Date"] = dates
+    meta = {"source": "Synthetic GBM", "real_bars": 0, "synthetic_bars": n}
+    return df, meta
+
+
+def run_strategy_analysis(
+    mode: str,
+    symbol: str,
+    strategy_name: str,
+    timeframe: str = "1d",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    data_source: str = "auto",
+    initial_cash: float = 100_000.0,
+    params: Optional[Dict[str, Any]] = None,
+    optimize_params: Optional[List[str]] = None,
+    objective_metric: str = "sharpe_ratio",
+    grid_steps: Optional[int] = None,
+    n_windows: Optional[int] = None,
+    n_trials: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Unified entry point for the Strategies tab.
+
+    Loads historical futures bars for the contract/date-range/timeframe and runs
+    one of three analyses:
+
+    * ``"backtest"``       — single run with *params*.
+    * ``"optimize"``       — exhaustive grid sweep over *optimize_params*.
+    * ``"walk_forward"``   — Optuna walk-forward optimisation over *optimize_params*.
+
+    Returns a JSON-serialisable dict consumed by the page callbacks.
+    """
+    cfg = get_analysis_config()
+    _apply_contract_spec(cfg, symbol)
+    cfg.portfolio.initial_cash = float(initial_cash)
+
+    is_research = mode in ("optimize", "walk_forward")
+    max_bars = cfg.analysis.max_optimize_bars if is_research else cfg.analysis.max_backtest_bars
+
+    df, meta = load_futures_bars_for_ui(
+        symbol=symbol,
+        timeframe=timeframe,
+        start_date=start_date,
+        end_date=end_date,
+        data_source=data_source,
+        max_bars=max_bars,
+    )
+    if df.empty or len(df) < 60:
+        return {"error": f"Insufficient data ({len(df)} bars) for {symbol} {timeframe}.", "coverage": meta}
+
+    sym = f"{symbol}.c.0"
+    bars = _dataframe_to_bars(df, sym, cfg.portfolio.contract_multiplier)
+    bar_map = {sym: bars}
+    strategy_cls = STRATEGY_REGISTRY.get(strategy_name)
+    if strategy_cls is None:
+        return {"error": f"Unknown strategy {strategy_name}.", "coverage": meta}
+
+    if mode == "backtest":
+        return _run_backtest_mode(cfg, strategy_cls, bar_map, df, params or {}, meta)
+    if mode == "optimize":
+        return _run_optimize_mode(
+            cfg, strategy_name, strategy_cls, bar_map, df,
+            optimize_params, objective_metric, grid_steps, meta,
+        )
+    if mode == "walk_forward":
+        return _run_walk_forward_mode(
+            cfg, strategy_name, strategy_cls, bar_map, df,
+            optimize_params, objective_metric, n_windows, n_trials, meta,
+        )
+    return {"error": f"Unknown analysis mode {mode}.", "coverage": meta}
+
+
+def _equity_df_from_result(result, df: pd.DataFrame, initial_cash: float) -> pd.DataFrame:
+    n_eq = len(result.equity_curve)
+    if n_eq > 0:
+        dates_for_eq = df["Date"].iloc[:n_eq].reset_index(drop=True)
+        return pd.DataFrame({
+            "Date":   dates_for_eq,
+            "Equity": result.equity_curve[:len(dates_for_eq)],
+        })
+    return pd.DataFrame({"Date": df["Date"], "Equity": [initial_cash] * len(df)})
+
+
+def _run_backtest_mode(cfg, strategy_cls, bar_map, df, params, meta) -> Dict[str, Any]:
+    from engine.backtest import BacktestEngine
+
+    engine = BacktestEngine(cfg, strategy_cls)
+    result = engine.run(bar_map, strategy_params=params or None)
+    eq_df = _equity_df_from_result(result, df, cfg.portfolio.initial_cash)
+    return {
+        "mode": "backtest",
+        "metrics": result.metrics,
+        "equity_curve": eq_df,
+        "fills": result.fills,
+        "price_df": df,
+        "params": params,
+        "coverage": meta,
+    }
+
+
+def _run_optimize_mode(
+    cfg, strategy_name, strategy_cls, bar_map, df,
+    optimize_params, objective_metric, grid_steps, meta,
+) -> Dict[str, Any]:
+    from engine.optimizer import (
+        GridOptimizer,
+        STRATEGY_PARAM_SPACES,
+        build_param_grid_from_yaml,
+    )
+
+    param_names = optimize_params or STRATEGY_PARAM_SPACES.get(strategy_name, [])
+    if not param_names:
+        return {"error": f"No optimisable parameters for {strategy_name}.", "coverage": meta}
+
+    steps = int(grid_steps or cfg.analysis.grid_steps_per_param)
+    root = os.path.dirname(os.path.dirname(__file__))
+    optuna_path = os.path.join(root, "config", "optuna.yaml")
+    grid = build_param_grid_from_yaml(param_names, steps, path=optuna_path)
+
+    optimizer = GridOptimizer(
+        cfg, strategy_cls, grid,
+        objective_metric=objective_metric,
+        max_combinations=cfg.analysis.max_grid_combinations,
+    )
+    n_combos = len(optimizer.combinations())
+    if n_combos > cfg.analysis.max_grid_combinations:
+        return {
+            "error": (
+                f"Grid has {n_combos} combinations (cap {cfg.analysis.max_grid_combinations}). "
+                "Fewer parameters or steps required."
+            ),
+            "coverage": meta,
+        }
+
+    opt_result = optimizer.run(bar_map)
+    trials_rows = [
+        {"params": tr.params, "objective": tr.objective_value, "metrics": tr.metrics}
+        for tr in opt_result.trials
+    ]
+
+    from engine.backtest import BacktestEngine
+    best_engine = BacktestEngine(cfg, strategy_cls)
+    best_result = best_engine.run(bar_map, strategy_params=opt_result.best_params)
+    eq_df = _equity_df_from_result(best_result, df, cfg.portfolio.initial_cash)
+
+    return {
+        "mode": "optimize",
+        "objective_metric": objective_metric,
+        "param_names": param_names,
+        "grid": grid,
+        "n_combinations": opt_result.n_combinations,
+        "trials": trials_rows,
+        "best_params": opt_result.best_params,
+        "best_metrics": opt_result.best_metrics,
+        "equity_curve": eq_df,
+        "price_df": df,
+        "coverage": meta,
+    }
+
+
+def _run_walk_forward_mode(
+    cfg, strategy_name, strategy_cls, bar_map, df,
+    optimize_params, objective_metric, n_windows, n_trials, meta,
+) -> Dict[str, Any]:
+    from engine.optimizer import (
+        STRATEGY_PARAM_SPACES,
+        WalkForwardOptimizer,
+        build_search_space_from_yaml,
+        HAS_OPTUNA,
+    )
+
+    if not HAS_OPTUNA:
+        return {"error": "optuna is not installed; walk-forward unavailable.", "coverage": meta}
+
+    param_names = optimize_params or STRATEGY_PARAM_SPACES.get(strategy_name, [])
+    root = os.path.dirname(os.path.dirname(__file__))
+    optuna_path = os.path.join(root, "config", "optuna.yaml")
+    search_space = build_search_space_from_yaml(param_names, path=optuna_path)
+    if not search_space:
+        return {"error": f"No optimisable parameters for {strategy_name}.", "coverage": meta}
+
+    windows = int(n_windows or cfg.analysis.walk_forward_windows)
+    trials = int(n_trials or cfg.analysis.walk_forward_trials)
+
+    optimizer = WalkForwardOptimizer(
+        cfg, strategy_cls, search_space, objective_metric=objective_metric
+    )
+    wfo = optimizer.run(
+        bar_map,
+        n_windows=windows,
+        in_sample_ratio=cfg.analysis.in_sample_ratio,
+        n_trials=trials,
+        timeout=cfg.analysis.walk_forward_timeout_seconds,
+    )
+
+    window_rows = []
+    for w in wfo.windows:
+        is_obj = (w.is_result.metrics.get(objective_metric) if w.is_result else None)
+        oos_obj = (w.oos_result.metrics.get(objective_metric) if w.oos_result else None)
+        window_rows.append({
+            "window_id": w.window_id,
+            "best_params": w.best_params,
+            "is_objective": is_obj,
+            "oos_objective": oos_obj,
+            "oos_metrics": w.oos_result.metrics if w.oos_result else {},
+        })
+
+    return {
+        "mode": "walk_forward",
+        "objective_metric": objective_metric,
+        "param_names": param_names,
+        "n_windows": windows,
+        "n_trials": trials,
+        "in_sample_ratio": cfg.analysis.in_sample_ratio,
+        "windows": window_rows,
+        "aggregated_oos_metrics": wfo.aggregated_oos_metrics,
+        "coverage": meta,
     }
 
 

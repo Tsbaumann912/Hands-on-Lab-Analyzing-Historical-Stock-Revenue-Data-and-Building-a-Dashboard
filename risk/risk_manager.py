@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -43,7 +43,7 @@ class RiskViolation:
     violation_type: ViolationType
     message: str
     original_signal: Signal
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -77,6 +77,7 @@ class RiskManager:
 
     def __init__(self, config: Config, portfolio: Portfolio) -> None:
         self._cfg = config.risk
+        self._portfolio_cfg = config.portfolio
         self._portfolio = portfolio
         self._trading_halted: bool = False
         self._halt_reason: Optional[str] = None
@@ -150,7 +151,7 @@ class RiskManager:
         # ── Rule 4: Position sizing ────────────────────────────────────────────
         equity = self._portfolio.total_equity
         max_notional = equity * self._cfg.max_position_size_pct
-        contract_multiplier = 50.0          # ES default; should be per-symbol
+        contract_multiplier = self._portfolio_cfg.contract_multiplier
 
         # Compute ATR-based contract quantity if signal has no suggested size
         suggested_qty = signal.suggested_size or self._kelly_size(

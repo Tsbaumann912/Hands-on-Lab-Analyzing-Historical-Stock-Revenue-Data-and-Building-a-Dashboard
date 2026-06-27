@@ -162,7 +162,7 @@ class TestSignalValidation:
             symbol="ES.c.0",
             direction=Direction.LONG,
             strength=0.8,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             strategy_name="test",
         )
         assert sig.strength == 0.8
@@ -173,7 +173,7 @@ class TestSignalValidation:
                 symbol="ES.c.0",
                 direction=Direction.LONG,
                 strength=-0.1,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 strategy_name="test",
             )
 
@@ -183,7 +183,7 @@ class TestSignalValidation:
                 symbol="ES.c.0",
                 direction=Direction.LONG,
                 strength=1.01,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 strategy_name="test",
             )
 
@@ -195,7 +195,7 @@ class TestOrder:
             direction=Direction.LONG,
             order_type=OrderType.MARKET,
             quantity=1.0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         assert order.is_active() is True
 
@@ -205,7 +205,7 @@ class TestOrder:
             direction=Direction.LONG,
             order_type=OrderType.MARKET,
             quantity=1.0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             status=OrderStatus.FILLED,
         )
         assert order.is_active() is False

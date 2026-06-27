@@ -72,6 +72,96 @@ backtest:
     - max_drawdown
     - calmar
 
+# ── Analysis workspace (Strategies tab — AmiBroker-style) ────────────────────
+# All tuneable bounds for the backtest / optimize / walk-forward UI live here.
+analysis:
+  history_start_date: "2000-01-01"     # earliest selectable date (futures market)
+  default_timeframe: "1d"              # 1m 5m 15m 30m 1h 4h 1d
+  default_data_source: auto            # auto | databento | historical | synthetic
+  max_backtest_bars: 60000             # hard cap on bars fed to a single run
+  max_optimize_bars: 30000             # tighter cap for grid / walk-forward runs
+  grid_steps_per_param: 4              # samples per parameter in grid optimisation
+  max_grid_combinations: 96            # safety cap on total grid combinations
+  objective_metric: sharpe_ratio       # default optimisation objective
+  objective_metrics:                   # selectable optimisation objectives
+    - sharpe_ratio
+    - sortino_ratio
+    - calmar_ratio
+    - total_return
+    - profit_factor
+  walk_forward_windows: 4
+  in_sample_ratio: 0.70
+  walk_forward_trials: 25
+  walk_forward_timeout_seconds: 90
+
+# ── Per-contract economics (CME futures specifications) ──────────────────────
+# notional = price × multiplier × contracts; never compute P&L on price alone.
+contracts:
+  ES:
+    name: E-mini S&P 500
+    yfinance_ticker: ES=F
+    contract_multiplier: 50.0
+    tick_size: 0.25
+    tick_value: 12.50
+    commission_per_contract: 2.25
+    synthetic_start_price: 4500.0
+  NQ:
+    name: E-mini Nasdaq-100
+    yfinance_ticker: NQ=F
+    contract_multiplier: 20.0
+    tick_size: 0.25
+    tick_value: 5.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 15500.0
+  CL:
+    name: Crude Oil WTI
+    yfinance_ticker: CL=F
+    contract_multiplier: 1000.0
+    tick_size: 0.01
+    tick_value: 10.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 75.0
+  GC:
+    name: Gold
+    yfinance_ticker: GC=F
+    contract_multiplier: 100.0
+    tick_size: 0.10
+    tick_value: 10.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 1800.0
+  NG:
+    name: Natural Gas
+    yfinance_ticker: NG=F
+    contract_multiplier: 10000.0
+    tick_size: 0.001
+    tick_value: 10.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 3.0
+  SI:
+    name: Silver
+    yfinance_ticker: SI=F
+    contract_multiplier: 5000.0
+    tick_size: 0.005
+    tick_value: 25.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 22.0
+  ZN:
+    name: 10-Year T-Note
+    yfinance_ticker: ZN=F
+    contract_multiplier: 1000.0
+    tick_size: 0.015625
+    tick_value: 15.625
+    commission_per_contract: 2.25
+    synthetic_start_price: 110.0
+  ZB:
+    name: 30-Year T-Bond
+    yfinance_ticker: ZB=F
+    contract_multiplier: 1000.0
+    tick_size: 0.03125
+    tick_value: 31.25
+    commission_per_contract: 2.25
+    synthetic_start_price: 145.0
+
 market_intelligence:
   history_start: "2000-01-01"
   cache_ttl_seconds: 300

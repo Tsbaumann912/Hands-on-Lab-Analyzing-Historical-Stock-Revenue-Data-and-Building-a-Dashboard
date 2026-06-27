@@ -41,13 +41,18 @@ def rsi(close: np.ndarray, period: int = 14) -> Optional[np.ndarray]:
     avg_gain[period - 1] = gains[:period].mean()
     avg_loss[period - 1] = losses[:period].mean()
 
-    for i in range(period, len(gains)):
-        avg_gain[i] = avg_gain[i - 1] * (1 - alpha) + gains[i] * alpha
-        avg_loss[i] = avg_loss[i - 1] * (1 - alpha) + losses[i] * alpha
+    # Wilder recurrence — unavoidable scalar loop; suppress overflow for
+    # extreme/synthetic price series (values are capped before next step).
+    _MAX_AVG = np.finfo(np.float64).max / 2.0
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+        for i in range(period, len(gains)):
+            avg_gain[i] = avg_gain[i - 1] * (1 - alpha) + gains[i] * alpha
+            avg_loss[i] = avg_loss[i - 1] * (1 - alpha) + losses[i] * alpha
+            if avg_gain[i] > _MAX_AVG:
+                avg_gain[i] = _MAX_AVG
+            if avg_loss[i] > _MAX_AVG:
+                avg_loss[i] = _MAX_AVG
 
-    # The loop above is over a derived delta array, not the price array directly,
-    # which is the standard Wilder recurrence — unavoidable scalar recurrence.
-    with np.errstate(divide="ignore", invalid="ignore"):
         rs = np.where(avg_loss == 0, np.inf, avg_gain / avg_loss)
     rsi_values = np.full(len(close), np.nan, dtype=np.float64)
     rsi_values[period:] = 100.0 - (100.0 / (1.0 + rs[period - 1:]))

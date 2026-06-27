@@ -1441,3 +1441,98 @@ input[type="number"]:focus {
   .tv-chart-wrapper { min-height: 560px; }
   .fut-metric-tile { flex: 1 1 45%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Strategy Lab — AmiBroker-style Analysis workspace ─────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+.sl-param-heading {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--apple-text-tertiary);
+  margin-bottom: 14px;
+}
+
+/* Date-range picker — match Apple input styling */
+.sl-date-picker .DateInput_input,
+.sl-date-picker .DateInput_input_1 {
+  font-family: var(--font-stack) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--apple-text) !important;
+  background: var(--apple-bg-secondary) !important;
+  border-radius: var(--apple-radius-sm) !important;
+  padding: 8px 10px !important;
+}
+
+.sl-date-picker .DateRangePickerInput {
+  background: var(--apple-bg-secondary) !important;
+  border: 1px solid var(--apple-border-strong) !important;
+  border-radius: var(--apple-radius-sm) !important;
+  overflow: hidden;
+}
+
+.sl-date-picker .DateRangePickerInput__withBorder {
+  border-radius: var(--apple-radius-sm) !important;
+}
+
+.sl-date-picker .DateRangePicker,
+.sl-date-picker .DateRangePickerInput,
+.sl-date-picker .DateInput {
+  width: 100%;
+  background: transparent !important;
+}
+
+.sl-date-picker .DateInput { width: 45%; }
+
+.sl-date-picker .CalendarDay__selected,
+.sl-date-picker .CalendarDay__selected:active,
+.sl-date-picker .CalendarDay__selected:hover {
+  background: var(--apple-blue) !important;
+  border-color: var(--apple-blue) !important;
+}
+
+.sl-date-picker .CalendarDay__selected_span {
+  background: rgba(0, 113, 227, 0.25) !important;
+  border-color: rgba(0, 113, 227, 0.25) !important;
+  color: var(--apple-text) !important;
+}
+
+/* Results tables (optimization / walk-forward) */
+.sl-results-table {
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-results-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--apple-bg-elevated);
+  z-index: 2;
+}
+
+.sl-best-row td {
+  background: rgba(52, 199, 89, 0.10) !important;
+  font-weight: 600;
+}
+
+.sl-best-row td:first-child {
+  border-left: 3px solid var(--apple-green);
+}
+
+.sl-best-summary {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(52, 199, 89, 0.08);
+  border: 1px solid rgba(52, 199, 89, 0.2);
+  border-radius: var(--apple-radius-sm);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Wrap tall results tables in a scroll area */
+.section-body .sl-results-table {
+  display: table;
+  width: 100%;
+}
