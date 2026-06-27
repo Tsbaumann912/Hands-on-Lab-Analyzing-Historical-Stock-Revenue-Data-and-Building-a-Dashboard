@@ -52,12 +52,16 @@ def compute_metrics(
     rf_period = (1 + risk_free_rate) ** (1 / periods_per_year) - 1
     excess_returns = returns - rf_period
 
+    excess_std_raw = excess_returns.std(ddof=1) if len(excess_returns) > 1 else 0.0
+    excess_std = 0.0 if (np.isnan(excess_std_raw) or np.isinf(excess_std_raw)) else float(excess_std_raw)
     sharpe = (
-        excess_returns.mean() / (excess_returns.std(ddof=1) + 1e-9) * np.sqrt(periods_per_year)
+        excess_returns.mean() / (excess_std + 1e-9) * np.sqrt(periods_per_year)
     )
 
     downside_returns = returns[returns < rf_period]
-    downside_std = downside_returns.std(ddof=1) if len(downside_returns) > 1 else 1e-9
+    with np.errstate(invalid="ignore", divide="ignore"):
+        downside_std_raw = downside_returns.std(ddof=1) if len(downside_returns) > 1 else np.nan
+    downside_std = 0.0 if (np.isnan(downside_std_raw) or np.isinf(downside_std_raw)) else float(downside_std_raw)
     sortino = excess_returns.mean() / (downside_std + 1e-9) * np.sqrt(periods_per_year)
 
     # ── Drawdown ───────────────────────────────────────────────────────────
