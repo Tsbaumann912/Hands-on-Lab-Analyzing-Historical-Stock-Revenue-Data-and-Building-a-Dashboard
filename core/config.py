@@ -13,6 +13,18 @@ import yaml
 # ── Sub-configs ───────────────────────────────────────────────────────────────
 
 @dataclass
+class AppConfig:
+    """Desktop application window and local server settings."""
+
+    host: str = "127.0.0.1"
+    port: int = 8050
+    window_title: str = "QuantTerminal"
+    window_width: int = 1440
+    window_height: int = 900
+    startup_timeout_seconds: int = 30
+
+
+@dataclass
 class DataConfig:
     provider: str = "databento"
     dataset: str = "GLBX.MDP3"            # CME Globex MDP3
@@ -153,6 +165,7 @@ class MarketIntelligenceConfig:
 
 @dataclass
 class Config:
+    app: AppConfig = field(default_factory=AppConfig)
     data: DataConfig = field(default_factory=DataConfig)
     indicators: IndicatorConfig = field(default_factory=IndicatorConfig)
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
@@ -203,6 +216,7 @@ class Config:
             raw: Dict[str, Any] = yaml.safe_load(fh) or {}
 
         return cls(
+            app=AppConfig(**raw.get("app", {})),
             data=DataConfig(**raw.get("data", {})),
             indicators=IndicatorConfig(**raw.get("indicators", {})),
             strategy=StrategyConfig(**raw.get("strategy", {})),

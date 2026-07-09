@@ -4,6 +4,15 @@
 
 log_level: INFO
 
+# ── Desktop application (window + local server) ───────────────────────────────
+app:
+  host: 127.0.0.1                # bind address for the local desktop server
+  port: 8050                     # preferred port; falls back to a free one if taken
+  window_title: QuantTerminal
+  window_width: 1440
+  window_height: 900
+  startup_timeout_seconds: 30    # max wait for the /health endpoint on launch
+
 data:
   provider: databento
   dataset: GLBX.MDP3           # CME Globex MDP3 (ES, NQ, CL, GC, etc.)
