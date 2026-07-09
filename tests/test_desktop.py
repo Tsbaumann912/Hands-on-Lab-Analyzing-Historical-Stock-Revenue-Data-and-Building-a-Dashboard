@@ -102,6 +102,30 @@ class TestFindAppModeBrowser:
         monkeypatch.setattr(desktop.Path, "exists", lambda _self: False)
         assert desktop.find_app_mode_browser() is None
 
+    def test_windows_candidates_expand_env_vars(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(desktop.sys, "platform", "win32")
+        monkeypatch.setenv("ProgramFiles", r"C:\Program Files")
+        expected = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        monkeypatch.setattr(
+            desktop.Path, "exists", lambda self: str(self) == expected
+        )
+        assert desktop.find_app_mode_browser() == expected
+
+    def test_windows_per_user_chrome_found(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(desktop.sys, "platform", "win32")
+        monkeypatch.delenv("ProgramFiles", raising=False)
+        monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+        monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\alice\AppData\Local")
+        expected = r"C:\Users\alice\AppData\Local\Google\Chrome\Application\chrome.exe"
+        monkeypatch.setattr(
+            desktop.Path, "exists", lambda self: str(self) == expected
+        )
+        assert desktop.find_app_mode_browser() == expected
+
 
 # ── End-to-end: real server boots and serves /health ─────────────────────────
 
@@ -164,3 +188,21 @@ class TestIconAssets:
     def test_icon_files_exist(self) -> None:
         assert (ROOT / "app" / "assets" / "icon.png").exists()
         assert (ROOT / "app" / "assets" / "favicon.ico").exists()
+
+
+# ── Windows batch entry points ────────────────────────────────────────────────
+
+class TestWindowsBatchFiles:
+    def test_installer_bat(self) -> None:
+        content = (ROOT / "install_windows.bat").read_bytes()
+        assert b"\r\n" in content  # cmd.exe expects CRLF
+        text = content.decode("ascii")  # non-ASCII breaks legacy codepages
+        assert "requirements.txt" in text
+        assert "install_desktop_app.py" in text
+
+    def test_launcher_bat(self) -> None:
+        content = (ROOT / "QuantTerminal.bat").read_bytes()
+        assert b"\r\n" in content
+        text = content.decode("ascii")
+        assert "desktop.py" in text
+        assert "pythonw" in text

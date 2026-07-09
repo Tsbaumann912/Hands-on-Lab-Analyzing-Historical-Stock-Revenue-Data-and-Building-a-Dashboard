@@ -19,6 +19,7 @@ Or install a double-clickable desktop shortcut (Windows / macOS / Linux):
 from __future__ import annotations
 
 import logging
+import ntpath
 import os
 import shutil
 import socket
@@ -46,12 +47,16 @@ log = logging.getLogger("quantterminal.desktop")
 _HEALTH_POLL_INTERVAL_SECONDS: float = 0.25
 
 # Chromium-family executables that support --app mode, per platform.
+# %VAR% environment references are expanded at lookup time (Windows per-user
+# installs live under %LOCALAPPDATA%). Edge ships with Windows 10/11, so a
+# Windows laptop always has at least one app-mode capable browser.
 _BROWSER_CANDIDATES: dict[str, list[str]] = {
     "win32": [
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
+        r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
+        r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe",
+        r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+        r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe",
     ],
     "darwin": [
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -134,7 +139,9 @@ def find_app_mode_browser() -> str | None:
     """Locate a Chromium-family browser executable that supports --app mode."""
     platform_key = "linux" if sys.platform.startswith("linux") else sys.platform
     for candidate in _BROWSER_CANDIDATES.get(platform_key, []):
-        if os.path.sep in candidate:
+        # ntpath.expandvars understands %VAR% references on every platform.
+        candidate = ntpath.expandvars(candidate)
+        if "\\" in candidate or "/" in candidate:
             if Path(candidate).exists():
                 return candidate
         else:

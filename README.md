@@ -52,6 +52,36 @@ python3 install_desktop_app.py
 | **macOS** | `QuantTerminal.app` bundle on the Desktop |
 | **Linux** | `QuantTerminal.desktop` on the Desktop + an entry in the app menu |
 
+### Windows laptops — one-click setup
+
+No command line needed. On the Windows machine:
+
+1. Install Python 3 from [python.org/downloads](https://www.python.org/downloads/windows/)
+   — tick **"Add python.exe to PATH"** during install (skip if already installed).
+2. Download / clone this repository (GitHub → **Code → Download ZIP** → extract).
+3. Double-click **`install_windows.bat`** in the project folder. It installs the
+   dependencies and puts a **QuantTerminal** icon on your desktop.
+4. Double-click **QuantTerminal** on the desktop to open the terminal. It opens
+   in its own app window via Microsoft Edge (preinstalled on Windows 10/11) or
+   Chrome — no browser tabs or address bar.
+
+`QuantTerminal.bat` in the project folder launches the app directly and can be
+used as a fallback if shortcut creation is blocked by policy.
+
+### Open from other laptops on your network
+
+To use QuantTerminal from a Windows laptop while the server runs on another
+machine (it binds to all interfaces on port 8050):
+
+```bash
+python3 wsgi.py                 # on the host machine
+```
+
+Then on the laptop, browse to `http://<host-ip>:8050` (find the host IP with
+`ipconfig` / `ip addr`). Allow port 8050 through the host firewall if prompted.
+Alternatively `./start-public.sh` exposes the app on a public Cloudflare URL
+that works from anywhere.
+
 You can also launch the window directly without a shortcut:
 
 ```bash
