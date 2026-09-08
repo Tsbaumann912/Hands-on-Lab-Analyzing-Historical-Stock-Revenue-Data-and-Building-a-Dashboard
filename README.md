@@ -36,6 +36,66 @@ python3 wsgi.py
 # The app opens at: http://127.0.0.1:8050
 ```
 
+## Desktop App (double-click to open)
+
+Install a **QuantTerminal** icon on your desktop, then open it like any other
+application — it launches in its own window (no browser tabs, no address bar):
+
+```bash
+# One-time setup: creates the desktop shortcut for your OS
+python3 install_desktop_app.py
+```
+
+| OS | What gets created |
+|----|-------------------|
+| **Windows** | `QuantTerminal.lnk` shortcut on the Desktop (launches silently via `pythonw`) |
+| **macOS** | `QuantTerminal.app` bundle on the Desktop |
+| **Linux** | `QuantTerminal.desktop` on the Desktop + an entry in the app menu |
+
+### Windows laptops — one-click setup
+
+No command line needed. On the Windows machine:
+
+1. Install Python 3 from [python.org/downloads](https://www.python.org/downloads/windows/)
+   — tick **"Add python.exe to PATH"** during install (skip if already installed).
+2. Download / clone this repository (GitHub → **Code → Download ZIP** → extract).
+3. Double-click **`install_windows.bat`** in the project folder. It installs the
+   dependencies and puts a **QuantTerminal** icon on your desktop.
+4. Double-click **QuantTerminal** on the desktop to open the terminal. It opens
+   in its own app window via Microsoft Edge (preinstalled on Windows 10/11) or
+   Chrome — no browser tabs or address bar.
+
+`QuantTerminal.bat` in the project folder launches the app directly and can be
+used as a fallback if shortcut creation is blocked by policy.
+
+### Open from other laptops on your network
+
+To use QuantTerminal from a Windows laptop while the server runs on another
+machine (it binds to all interfaces on port 8050):
+
+```bash
+python3 wsgi.py                 # on the host machine
+```
+
+Then on the laptop, browse to `http://<host-ip>:8050` (find the host IP with
+`ipconfig` / `ip addr`). Allow port 8050 through the host firewall if prompted.
+Alternatively `./start-public.sh` exposes the app on a public Cloudflare URL
+that works from anywhere.
+
+You can also launch the window directly without a shortcut:
+
+```bash
+python3 desktop.py
+```
+
+The launcher starts the local server (picking a free port if 8050 is busy),
+waits for it to become healthy, then opens the app window using the best
+available backend: a native window via [pywebview](https://pywebview.flowrl.com)
+if installed (`pip install pywebview`), otherwise a Chrome/Edge/Chromium
+app-mode window, otherwise the default browser. Closing the window shuts the
+server down cleanly. Window size, port, and title are configurable under the
+`app:` section of `config/default.yaml`.
+
 ## Public URL (Cloudflare Tunnel)
 
 Open QuantTerminal in any browser:

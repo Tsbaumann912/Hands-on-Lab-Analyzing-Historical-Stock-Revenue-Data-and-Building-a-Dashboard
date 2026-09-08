@@ -31,6 +31,9 @@ pytest-asyncio>=0.23.0
 pytest-cov>=4.1.0
 
 # ── Desktop web application ───────────────────────────────────────────────────
+# Optional native desktop window for desktop.py (falls back to Chrome/Edge
+# app-mode if absent). On Linux, pywebview also needs system GTK/QtWebEngine.
+# pywebview>=5.0
 dash>=2.17.0
 dash-bootstrap-components>=1.6.0
 yfinance>=0.2.38
