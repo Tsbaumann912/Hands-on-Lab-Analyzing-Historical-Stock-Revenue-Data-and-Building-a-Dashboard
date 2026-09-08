@@ -539,6 +539,13 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
     """
     # Shared risk: user-requested max_position_size_pct = 5
     risk_ovr = {"max_position_size_pct": 5.0}
+    risk_yearly = {
+        "max_position_size_pct": 5.0,
+        "yearly_profit_lock_enabled": True,
+        "yearly_profit_lock_pct": 0.001,
+        "yearly_profit_lock_min_days": 1,
+        "yearly_nov_protect": True,
+    }
 
     anchor = {
         "horizons_days": [21, 63, 252],
@@ -586,6 +593,15 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
         "fade": 0.0,
         "ma_cross": 0.28,
         "stoch_rsi": 0.20,
+    }
+    w_yearly = {
+        "tsmom": 0.50,
+        "carry": 0.0,
+        "basis_mom": 0.0,
+        "inventory": 0.0,
+        "fade": 0.0,
+        "ma_cross": 0.25,
+        "stoch_rsi": 0.25,
     }
     return [
         ("A_baseline", root),
@@ -647,6 +663,24 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                     "slow_ma_period": 50,
                 },
                 risk_overrides=risk_ovr,
+            ),
+        ),
+        (
+            "H_yearly_profit",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": w_yearly,
+                    "horizons_days": [21, 63],
+                    "agreement_min": 0.50,
+                    "buffer_forecast": 2.5,
+                    "kelly_fraction": 0.40,
+                    "vol_target_annual": 0.15,
+                    "fast_ma_period": 8,
+                    "slow_ma_period": 34,
+                },
+                risk_overrides=risk_yearly,
             ),
         ),
     ]

@@ -121,11 +121,18 @@ def _rolling_minmax(x: np.ndarray, window: int, mode: str) -> np.ndarray:
         return out
     from numpy.lib.stride_tricks import sliding_window_view
 
-    view = sliding_window_view(np.nan_to_num(x, nan=np.nan), window)
+    # Replace NaNs with +inf/-inf so warm-up windows don't emit All-NaN warnings.
+    filled = np.array(x, dtype=np.float64, copy=True)
     if mode == "min":
-        vals = np.nanmin(view, axis=1)
+        filled = np.where(np.isfinite(filled), filled, np.inf)
+        view = sliding_window_view(filled, window)
+        vals = np.min(view, axis=1)
+        vals = np.where(np.isfinite(vals), vals, np.nan)
     else:
-        vals = np.nanmax(view, axis=1)
+        filled = np.where(np.isfinite(filled), filled, -np.inf)
+        view = sliding_window_view(filled, window)
+        vals = np.max(view, axis=1)
+        vals = np.where(np.isfinite(vals), vals, np.nan)
     out[window - 1 :] = vals
     return out
 

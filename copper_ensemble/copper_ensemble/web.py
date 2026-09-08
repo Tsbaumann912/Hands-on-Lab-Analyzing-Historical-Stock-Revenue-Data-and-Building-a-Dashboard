@@ -10,7 +10,7 @@ from typing import Any, Dict
 from flask import Flask, Response, jsonify, render_template_string, request
 
 from copper_ensemble.data import dataframe_to_bars, load_yfinance_hg, make_synthetic_hg
-from copper_ensemble.engine import BacktestEngine
+from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 from copper_ensemble.models import load_config
 from copper_ensemble.validation import validate_ensemble
 
@@ -142,7 +142,7 @@ DASHBOARD_HTML = """
 <body>
   <header>
     <h1 class="brand">Copper Ensemble</h1>
-    <p class="tag">Standalone COMEX HG CTA — TSMOM, carry, basis-momentum, inventory, fade, Fast/Slow MA cross, and Stochastic RSI in one vol-targeted book.</p>
+    <p class="tag">Standalone COMEX HG CTA — TSMOM + Fast/Slow MA + Stochastic RSI with calendar-year profit lock (flatten once YTD is green).</p>
   </header>
   <main>
     <section class="panel">
@@ -173,6 +173,11 @@ DASHBOARD_HTML = """
     </section>
 
     <section class="panel">
+      <h2>Calendar-year returns</h2>
+      <div id="yearlyTable"></div>
+    </section>
+
+    <section class="panel">
       <h2>Sleeve ablation (Sharpe)</h2>
       <div id="ablationChart" style="height:280px;"></div>
     </section>
@@ -197,12 +202,33 @@ DASHBOARD_HTML = """
         ['Ulcer Index', fmt(m.ulcer_index, 2) + '%', ''],
         ['Total return', pct(m.total_return), m.total_return >= 0 ? 'good' : 'bad'],
         ['Max DD', pct(m.max_drawdown), 'bad'],
+        ['Profitable years', fmt(m.n_profitable_years, 0) + ' / ' + fmt(m.n_calendar_years, 0),
+          (m.n_losing_years === 0 ? 'good' : 'bad')],
+        ['Min year return', pct(m.min_year_return), m.min_year_return > 0 ? 'good' : 'bad'],
         ['Fills', fmt(m.n_fills, 0), ''],
         ['Gates', v.passed ? 'PASSED' : 'FAILED', v.passed ? 'good' : 'bad'],
       ];
       document.getElementById('metrics').innerHTML = items.map(([k, val, cls]) =>
         `<div class="metric"><div class="k">${k}</div><div class="v ${cls}">${val}</div></div>`
       ).join('');
+    }
+
+    function renderYearly(yearly) {
+      const years = Object.keys(yearly || {}).sort();
+      if (!years.length) {
+        document.getElementById('yearlyTable').innerHTML = '<p>No yearly data</p>';
+        return;
+      }
+      const rows = years.map(y => {
+        const r = yearly[y];
+        const cls = r > 0 ? 'good' : (r < 0 ? 'bad' : '');
+        return `<tr><td>${y}</td><td class="${cls}">${pct(r)}</td></tr>`;
+      }).join('');
+      document.getElementById('yearlyTable').innerHTML = `
+        <table>
+          <thead><tr><th>Year</th><th>Return</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
     }
 
     function renderEquity(dates, equity) {
@@ -277,6 +303,7 @@ DASHBOARD_HTML = """
         if (!res.ok) throw new Error(data.error || 'request failed');
         renderMetrics(data.metrics, data.validation);
         renderEquity(data.dates, data.equity);
+        renderYearly(data.yearly_returns || {});
         renderAblation(data.validation.ablations);
         renderGates(data.validation);
         status.textContent = `Done · ${data.n_bars} bars · ${data.date_start || ''} → ${data.date_end || ''} · ${data.metrics.n_fills} fills · ${data.source}`;
@@ -398,6 +425,12 @@ def api_run() -> Any:
                 "metrics": result.metrics,
                 "equity": result.equity_curve.tolist(),
                 "dates": dates,
+                "yearly_returns": {
+                    str(y): float(r)
+                    for y, r in calendar_year_returns(
+                        result.equity_curve, [b.timestamp for b in bars]
+                    ).items()
+                },
                 "n_bars": len(bars),
                 "date_start": dates[0] if dates else None,
                 "date_end": dates[-1] if dates else None,

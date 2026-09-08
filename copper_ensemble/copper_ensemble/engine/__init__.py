@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -69,6 +69,34 @@ def ulcer_performance_index(
     if ui < 1e-9:
         return 10.0 if ann_pct > 0 else (-10.0 if ann_pct < 0 else 0.0)
     return float(ann_pct / ui)
+
+
+def calendar_year_returns(
+    equity: np.ndarray,
+    timestamps: Sequence[object],
+) -> Dict[int, float]:
+    """
+    Calendar-year equity returns (year-end / prior year-end − 1).
+
+    First year uses the first equity observation as the start mark.
+    """
+    if equity.size == 0 or len(timestamps) == 0:
+        return {}
+    n = min(int(equity.size), len(timestamps))
+    import pandas as pd
+
+    s = pd.Series(np.asarray(equity[:n], dtype=float), index=pd.to_datetime(list(timestamps[:n])))
+    out: Dict[int, float] = {}
+    prev: Optional[float] = None
+    for year in sorted(int(y) for y in s.index.year.unique()):
+        sy = s[s.index.year == year]
+        if sy.empty:
+            continue
+        start = float(prev if prev is not None else sy.iloc[0])
+        end = float(sy.iloc[-1])
+        out[year] = end / start - 1.0 if start > 0 else 0.0
+        prev = end
+    return out
 
 
 def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
@@ -152,9 +180,10 @@ class BacktestEngine:
 
         for i, bar in enumerate(bars):
             # MTM
+            prior_equity = equity
             if i > 0:
                 equity += position * mult * (bar.close - prev_close)
-            risk.update_equity(equity)
+            risk.update_equity(equity, bar.timestamp, prior_equity=prior_equity)
 
             raw_sig = strat.signal_at(i)
             decision = risk.evaluate(raw_sig, bar.close)
@@ -195,6 +224,12 @@ class BacktestEngine:
         rets[1:] = np.diff(eq_curve) / np.maximum(eq_curve[:-1], 1e-12)
         metrics = _compute_metrics(eq_curve)
         metrics["n_fills"] = float(len(fills))
+        yearly = calendar_year_returns(eq_curve, [b.timestamp for b in bars])
+        if yearly:
+            metrics["n_profitable_years"] = float(sum(1 for r in yearly.values() if r > 0))
+            metrics["n_losing_years"] = float(sum(1 for r in yearly.values() if r < 0))
+            metrics["min_year_return"] = float(min(yearly.values()))
+            metrics["n_calendar_years"] = float(len(yearly))
         return BacktestResult(
             equity_curve=eq_curve,
             returns=rets,

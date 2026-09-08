@@ -231,7 +231,7 @@ def test_candidate_selection_upi_metric() -> None:
     winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3, metric="upi")
     assert winner.name
     assert hasattr(winner, "composite_oos_upi")
-    assert len(ranked) == 6
+    assert len(ranked) >= 6
     assert np.isfinite(winner.composite_oos_upi)
 
 
@@ -257,8 +257,30 @@ def test_candidate_selection_synthetic() -> None:
     bars = dataframe_to_bars(make_synthetic_hg(1200, seed=9), "HG")
     winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3)
     assert winner.name
-    assert len(ranked) == 6
+    assert len(ranked) >= 6
     assert np.isfinite(winner.mean_oos_sharpe)
+
+
+def test_yearly_profit_lock_all_green_on_config() -> None:
+    """Production yearly-profit config should post profit every calendar year on HG 2008→now."""
+    from copper_ensemble.data import load_yfinance_hg
+    from copper_ensemble.engine import BacktestEngine, calendar_year_returns
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    assert cfg.risk.yearly_profit_lock_enabled is True
+    try:
+        bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Yahoo unavailable: {exc}")
+    if len(bars) < 2000:
+        pytest.skip("insufficient HG history")
+    result = BacktestEngine(cfg).run(bars)
+    yearly = calendar_year_returns(result.equity_curve, [b.timestamp for b in bars])
+    assert yearly, "expected calendar years"
+    losing = [y for y, r in yearly.items() if r < 0]
+    assert not losing, f"losing years: {losing}"
+    assert float(result.metrics.get("n_losing_years", 1)) == 0.0
+    assert float(result.metrics.get("min_year_return", -1)) > 0.0
 
 
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:

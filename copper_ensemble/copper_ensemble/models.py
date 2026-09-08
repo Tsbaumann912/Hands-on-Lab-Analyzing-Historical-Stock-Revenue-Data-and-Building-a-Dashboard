@@ -103,6 +103,13 @@ class RiskConfig:
     max_contracts: int
     halt_on_breach: bool
     halt_cooldown_bars: int = 21
+    # Calendar-year profit lock: flatten for the rest of the year once YTD
+    # return reaches ``yearly_profit_lock_pct`` (after ``yearly_profit_lock_min_days``).
+    yearly_profit_lock_enabled: bool = False
+    yearly_profit_lock_pct: float = 0.001
+    yearly_profit_lock_min_days: int = 1
+    # From November onward, lock any still-green YTD year.
+    yearly_nov_protect: bool = True
 
 
 @dataclass(frozen=True)
@@ -223,6 +230,14 @@ def clone_config(
         max_contracts=int(ro.get("max_contracts", r.max_contracts)),
         halt_on_breach=bool(ro.get("halt_on_breach", r.halt_on_breach)),
         halt_cooldown_bars=int(ro.get("halt_cooldown_bars", r.halt_cooldown_bars)),
+        yearly_profit_lock_enabled=bool(
+            ro.get("yearly_profit_lock_enabled", r.yearly_profit_lock_enabled)
+        ),
+        yearly_profit_lock_pct=float(ro.get("yearly_profit_lock_pct", r.yearly_profit_lock_pct)),
+        yearly_profit_lock_min_days=int(
+            ro.get("yearly_profit_lock_min_days", r.yearly_profit_lock_min_days)
+        ),
+        yearly_nov_protect=bool(ro.get("yearly_nov_protect", r.yearly_nov_protect)),
     )
     return Config(
         contract=cfg.contract,
@@ -295,6 +310,10 @@ def load_config(path: str | Path | None = None) -> Config:
             max_contracts=int(r["max_contracts"]),
             halt_on_breach=bool(r["halt_on_breach"]),
             halt_cooldown_bars=int(r.get("halt_cooldown_bars", 21)),
+            yearly_profit_lock_enabled=bool(r.get("yearly_profit_lock_enabled", False)),
+            yearly_profit_lock_pct=float(r.get("yearly_profit_lock_pct", 0.001)),
+            yearly_profit_lock_min_days=int(r.get("yearly_profit_lock_min_days", 1)),
+            yearly_nov_protect=bool(r.get("yearly_nov_protect", True)),
         ),
         portfolio=PortfolioConfig(initial_cash=float(p["initial_cash"])),
         backtest=BacktestConfig(

@@ -74,11 +74,18 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
 2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
-**Production choice (2008→now):** `G_ma_stoch_heavy` — Fast/Slow MA + Stochastic RSI overweight,
-fade off, horizons `[63, 126, 252]`, `max_position_size_pct=5`.
-Leads UPI dual-WFA (composite ≈ 0.81) vs prior `C_no_fade_long_h` (≈ 0.73) under the same protocol.
+**Production choice (2008→now):** `H_yearly_profit` — prioritises **positive return every calendar year** via:
 
-## Run
+1. Shorter horizons `[21, 63]`, high agreement (0.50), TSMOM + MA + StochRSI blend.
+2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.1%) after
+   `yearly_profit_lock_min_days`, flatten for the rest of the year; also lock any
+   still-green year from November onward (`yearly_nov_protect`).
+
+On Yahoo HG 2008→now this posts **profit in every calendar year** (min year ≈ +0.25%,
+total ≈ +20%, UPI ≈ 2.3). Trade-off vs `G_ma_stoch_heavy`: lower cumulative return
+(~20% vs ~40%) in exchange for eliminating losing years. This is an **in-sample
+calendar objective** — useful for year-by-year P&amp;L discipline, not a claim of
+extra OOS alpha.
 
 ```bash
 cd copper_ensemble
