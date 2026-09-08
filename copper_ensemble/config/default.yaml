@@ -45,7 +45,10 @@ portfolio:
   initial_cash: 500000.0
 
 backtest:
+  # Auto-bumped to 8 when series length ≥ 3000 bars (see validation.validate_ensemble).
   walk_forward_windows: 4
+  walk_forward_windows_long: 8
+  long_history_bars: 3000
   in_sample_ratio: 0.70
   purge_bars: 5
 

@@ -124,10 +124,15 @@ def validate_ensemble(config: Config, bars: List[Bar]) -> ValidationReport:
     engine = BacktestEngine(config)
     full = engine.run(bars)
     ablations = run_ablation(engine, bars)
+
+    n_windows = config.backtest.walk_forward_windows
+    if len(bars) >= config.backtest.long_history_bars:
+        n_windows = config.backtest.walk_forward_windows_long
+
     wf = purged_walk_forward(
         engine,
         bars,
-        n_windows=config.backtest.walk_forward_windows,
+        n_windows=n_windows,
         is_ratio=config.backtest.in_sample_ratio,
         purge=config.backtest.purge_bars,
     )

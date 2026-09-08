@@ -105,6 +105,8 @@ class BacktestConfig:
     walk_forward_windows: int
     in_sample_ratio: float
     purge_bars: int
+    walk_forward_windows_long: int = 8
+    long_history_bars: int = 3000
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,8 @@ def load_config(path: str | Path | None = None) -> Config:
             walk_forward_windows=int(b["walk_forward_windows"]),
             in_sample_ratio=float(b["in_sample_ratio"]),
             purge_bars=int(b["purge_bars"]),
+            walk_forward_windows_long=int(b.get("walk_forward_windows_long", 8)),
+            long_history_bars=int(b.get("long_history_bars", 3000)),
         ),
         validation=ValidationConfig(
             dsr_pass_threshold=float(v["dsr_pass_threshold"]),

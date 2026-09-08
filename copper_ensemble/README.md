@@ -27,9 +27,16 @@ pytest -q
 python -m copper_ensemble.cli backtest --synthetic --plot-summary
 python -m copper_ensemble.cli validate --synthetic
 
-# Web dashboard (default http://127.0.0.1:8060)
-python -m copper_ensemble.web
+## Market walk-forward (2008 → now)
+
+```bash
+# Yahoo HG=F from 2008-01-01 through today (curve/inventory/PMI are proxies)
+python -m copper_ensemble.cli validate --start 2008-01-01
+python -m copper_ensemble.cli backtest --start 2008-01-01 --plot-summary
 ```
+
+In the web UI choose **Yahoo HG 2008→now** and click **Run backtest + validate**.
+Long histories (≥3000 bars) use 8 walk-forward windows automatically.
 
 ## Layout
 

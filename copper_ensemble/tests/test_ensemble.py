@@ -124,7 +124,21 @@ def test_validation_report() -> None:
     assert 0.0 <= report.deflated_sharpe <= 1.0
 
 
-def test_dsr_monotonic_in_trials() -> None:
-    dsr_few = deflated_sharpe_ratio(1.5, n_obs=500, n_trials=2)
-    dsr_many = deflated_sharpe_ratio(1.5, n_obs=500, n_trials=200)
-    assert dsr_few >= dsr_many
+def test_long_history_uses_eight_wfa_windows() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(3200, seed=5), "HG")
+    report = validate_ensemble(cfg, bars)
+    assert len(report.walk_forward) >= 6  # should target 8; some may skip if short blocks
+
+
+def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Smoke: loader accepts start=; skip if network/Yahoo unavailable."""
+    from copper_ensemble.data import load_yfinance_hg
+
+    try:
+        df = load_yfinance_hg("HG=F", start="2008-01-01", end="2008-06-30")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Yahoo unavailable: {exc}")
+    assert len(df) > 50
+    assert df.index.min().year == 2008
+

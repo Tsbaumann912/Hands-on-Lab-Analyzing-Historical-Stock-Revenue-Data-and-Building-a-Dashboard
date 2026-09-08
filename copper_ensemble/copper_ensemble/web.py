@@ -149,8 +149,9 @@ DASHBOARD_HTML = """
       <div class="controls">
         <label>Data source
           <select id="source">
-            <option value="synthetic" selected>Synthetic HG</option>
-            <option value="yfinance">Yahoo Finance HG=F</option>
+            <option value="yfinance_2008" selected>Yahoo HG 2008→now</option>
+            <option value="synthetic">Synthetic HG</option>
+            <option value="yfinance">Yahoo HG (5y)</option>
           </select>
         </label>
         <label>Days (synthetic)
@@ -158,7 +159,7 @@ DASHBOARD_HTML = """
         </label>
         <button id="runBtn" type="button">Run backtest + validate</button>
       </div>
-      <p id="status">Ready.</p>
+      <p id="status">Ready. First market run loads Yahoo HG from 2008 (may take 1–3 min).</p>
     </section>
 
     <section class="panel">
@@ -266,7 +267,7 @@ DASHBOARD_HTML = """
         renderEquity(data.dates, data.equity);
         renderAblation(data.validation.ablations);
         renderGates(data.validation);
-        status.textContent = `Done · ${data.n_bars} bars · ${data.metrics.n_fills} fills`;
+        status.textContent = `Done · ${data.n_bars} bars · ${data.date_start || ''} → ${data.date_end || ''} · ${data.metrics.n_fills} fills · ${data.source}`;
       } catch (err) {
         status.textContent = 'Error: ' + err.message;
       } finally {
@@ -275,26 +276,44 @@ DASHBOARD_HTML = """
     }
 
     document.getElementById('runBtn').addEventListener('click', run);
-    run();
+    // Do not auto-run Yahoo 2008 on every page load (slow); wait for click
+    // unless synthetic is selected — still auto-run synthetic for quick demo.
+    if (document.getElementById('source').value === 'synthetic') {
+      run();
+    } else {
+      document.getElementById('status').textContent =
+        'Select Run to load Yahoo HG from 2008→now and walk-forward validate.';
+    }
   </script>
 </body>
 </html>
 """
 
 
-def _load_bars(source: str, days: int) -> tuple[Any, list]:
+def _load_bars(source: str, days: int) -> tuple[Any, list, str]:
     cfg = load_config(CONFIG_PATH)
-    if source == "yfinance":
+    label = source
+    if source == "yfinance_2008":
+        try:
+            df = load_yfinance_hg(cfg.contract.yfinance_ticker, start="2008-01-01")
+            label = f"yfinance HG=F {df.index.min().date()}→{df.index.max().date()}"
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("yfinance 2008 load failed; falling back to synthetic")
+            df = make_synthetic_hg(n_days=days, seed=42)
+            label = f"synthetic-fallback ({exc})"
+    elif source == "yfinance":
         try:
             df = load_yfinance_hg(cfg.contract.yfinance_ticker, period="5y")
+            label = f"yfinance HG=F 5y ({df.index.min().date()}→{df.index.max().date()})"
         except Exception as exc:  # noqa: BLE001
             logger.exception("yfinance load failed; falling back to synthetic")
             df = make_synthetic_hg(n_days=days, seed=42)
-            source = f"synthetic-fallback ({exc})"
+            label = f"synthetic-fallback ({exc})"
     else:
         df = make_synthetic_hg(n_days=days, seed=42)
+        label = "synthetic"
     bars = dataframe_to_bars(df, symbol=cfg.contract.symbol)
-    return cfg, bars
+    return cfg, bars, label
 
 
 @app.get("/health")
@@ -310,16 +329,19 @@ def index() -> str:
 @app.post("/api/run")
 def api_run() -> Any:
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
-    source = str(payload.get("source", "synthetic"))
+    source = str(payload.get("source", "yfinance_2008"))
     days = int(payload.get("days", 1500))
     days = max(400, min(days, 5000))
 
     try:
-        cfg, bars = _load_bars(source, days)
+        cfg, bars, label = _load_bars(source, days)
         engine = BacktestEngine(cfg)
         result = engine.run(bars)
         report = validate_ensemble(cfg, bars)
-        dates = [b.timestamp.isoformat() if hasattr(b.timestamp, "isoformat") else str(b.timestamp) for b in bars]
+        dates = [
+            b.timestamp.isoformat() if hasattr(b.timestamp, "isoformat") else str(b.timestamp)
+            for b in bars
+        ]
         validation = {
             "passed": report.passed,
             "deflated_sharpe": report.deflated_sharpe,
@@ -342,8 +364,10 @@ def api_run() -> Any:
                 "equity": result.equity_curve.tolist(),
                 "dates": dates,
                 "n_bars": len(bars),
+                "date_start": dates[0] if dates else None,
+                "date_end": dates[-1] if dates else None,
                 "validation": validation,
-                "source": source,
+                "source": label,
             }
         )
     except Exception as exc:  # noqa: BLE001
