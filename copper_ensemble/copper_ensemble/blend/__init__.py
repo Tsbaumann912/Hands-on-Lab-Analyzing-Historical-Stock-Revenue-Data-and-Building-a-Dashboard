@@ -110,7 +110,7 @@ def blend_forecasts(
         raw = np.where(w_sum > 0, (mat0 * w_row).sum(axis=1) / np.maximum(w_sum, 1e-12), 0.0)
 
     # Flatten on low agreement
-    scaled = np.where(a < cfg.agreement_min, 0.0, a * raw)
+    scaled = np.where(a <= cfg.agreement_min, 0.0, a * raw)
     scaled = np.clip(scaled, -cfg.forecast_cap, cfg.forecast_cap)
 
     fdm = forecast_diversification_multiplier(mat, w, cap=cfg.fdm_cap)
