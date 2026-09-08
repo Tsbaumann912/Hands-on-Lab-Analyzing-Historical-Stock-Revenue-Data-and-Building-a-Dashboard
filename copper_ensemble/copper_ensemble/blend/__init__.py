@@ -8,11 +8,19 @@ import numpy as np
 
 from copper_ensemble.models import EnsembleConfig
 
-SLEEVE_ORDER = ("tsmom", "carry", "basis_mom", "inventory", "fade")
+SLEEVE_ORDER = (
+    "tsmom",
+    "carry",
+    "basis_mom",
+    "inventory",
+    "fade",
+    "ma_cross",
+    "stoch_rsi",
+)
 
 
 def _weight_vector(weights: Mapping[str, float]) -> np.ndarray:
-    w = np.array([float(weights[k]) for k in SLEEVE_ORDER], dtype=np.float64)
+    w = np.array([float(weights.get(k, 0.0)) for k in SLEEVE_ORDER], dtype=np.float64)
     s = float(np.sum(w))
     if s <= 0:
         raise ValueError("ensemble weights must sum to a positive number")
@@ -110,7 +118,7 @@ def blend_forecasts(
         raw = np.where(w_sum > 0, (mat0 * w_row).sum(axis=1) / np.maximum(w_sum, 1e-12), 0.0)
 
     # Flatten on low agreement
-    scaled = np.where(a < cfg.agreement_min, 0.0, a * raw)
+    scaled = np.where(a <= cfg.agreement_min, 0.0, a * raw)
     scaled = np.clip(scaled, -cfg.forecast_cap, cfg.forecast_cap)
 
     fdm = forecast_diversification_multiplier(mat, w, cap=cfg.fdm_cap)
