@@ -1,6 +1,6 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
-# Production ensemble selected by nested purged OOS among a tiny pre-specified
-# candidate set (see RESEARCH.md). Fade disabled; longer TSMOM horizons.
+# Production ensemble: UPI dual-WFA winner C_no_fade_long_h
+# (rolling + anchored purged OOS Ulcer Performance Index).
 contract:
   symbol: HG
   name: Copper
@@ -12,7 +12,7 @@ contract:
   slippage_ticks: 1
 
 ensemble:
-  # Longer horizons reduce short-noise; fade sleeve off (Yahoo PMI/USD are proxies).
+  # Longer horizons; fade sleeve off (Yahoo PMI/USD are proxies).
   horizons_days: [63, 126, 252]
   weights:
     tsmom: 0.55
@@ -37,22 +37,18 @@ ensemble:
   take_profit_atr_mult: 4.0
 
 risk:
-  # 3% was permanently killing multi-year backtests after one quiet loss streak.
   max_daily_drawdown_pct: 0.15
   max_position_size_pct: 0.50
   max_leverage: 5.0
   max_contracts: 20
   halt_on_breach: true
-  # After a breach, force resume after N flat bars and reset the equity peak.
-  # Without this, staying flat never recovers DD vs peak → book dies forever (~2014).
+  # Timed resume + peak reset so flat books do not die forever after a breach.
   halt_cooldown_bars: 21
 
 portfolio:
-  # HG notional ≈ price × 25,000 (~$100k/contract at $4/lb); size for ≥1 lot.
   initial_cash: 500000.0
 
 backtest:
-  # Auto-bumped to 8 when series length ≥ 3000 bars (see validation.validate_ensemble).
   walk_forward_windows: 4
   walk_forward_windows_long: 8
   long_history_bars: 3000
@@ -62,5 +58,4 @@ backtest:
 validation:
   dsr_pass_threshold: 0.95
   oos_retention_min: 0.60
-  # Aspirational institutional CTA bar — single-name HG OOS WFA typically cannot clear this.
   target_mean_oos_sharpe: 1.5

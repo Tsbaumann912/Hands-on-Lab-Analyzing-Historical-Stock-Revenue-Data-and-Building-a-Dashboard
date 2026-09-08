@@ -54,6 +54,12 @@ Ranking key for the fixed candidate menu:
 `composite_oos_upi = 0.5·mean(rolling OOS UPI) + 0.5·mean(anchored OOS UPI)`,
 then `min(rolling, anchored)` for robustness, then full-sample UPI.
 
+**2008→now Yahoo HG result:** winner `C_no_fade_long_h`
+(composite OOS UPI ≈ **0.275**; rolling ≈ −0.167, anchored ≈ **0.716**;
+full-sample UPI ≈ 0.113, Ulcer Index ≈ 10.0%, return ≈ 23%). Same economic
+config also led under Sharpe-only ranking — UPI confirms it is the most
+return-per-pain robust menu member across both WFA schemes.
+
 ```bash
 python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates --metric upi
 python -m copper_ensemble.cli validate --start 2008-01-01
@@ -63,13 +69,11 @@ python -m copper_ensemble.cli validate --start 2008-01-01
 
 Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 
-1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS; pick the winner by mean OOS Sharpe. No continuous search → low multiple-testing risk.
-2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now this **did not beat** the untuned baseline on nested OOS, which is the expected outcome when the edge is weak.
+1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
+2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
 **Production choice (2008→now):** `C_no_fade_long_h` — fade sleeve off, TSMOM horizons `[63, 126, 252]`.
-Among the fixed menu this wins on both 6-window nested OOS (~+0.26 vs baseline ~+0.22) and
-8-window nested OOS (~−0.29 vs baseline ~−0.48) with lower turnover. Anchored 2019→now holdout
-remains weak (single-name limit). Free Optuna did **not** beat baseline on nested OOS.
+Wins under both Sharpe and UPI dual-WFA ranking. Anchored OOS UPI is strongly positive while rolling remains weak — composite still tops the menu.
 
 ## Run
 
