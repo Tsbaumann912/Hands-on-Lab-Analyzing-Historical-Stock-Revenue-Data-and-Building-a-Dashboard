@@ -79,6 +79,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         "oos_retention": report.oos_retention,
         "mean_oos_sharpe": report.mean_oos_sharpe,
         "mean_is_sharpe": report.mean_is_sharpe,
+        "mean_oos_upi": report.mean_oos_upi,
+        "mean_anchored_oos_upi": report.mean_anchored_oos_upi,
+        "composite_oos_upi": report.composite_oos_upi,
         "target_oos_met": report.target_oos_met,
         "passed": report.passed,
         "notes": report.notes,
@@ -89,11 +92,28 @@ def cmd_validate(args: argparse.Namespace) -> int:
         "walk_forward": [
             {
                 "window": w.window,
+                "scheme": w.scheme,
                 "is_sharpe": w.is_sharpe,
                 "oos_sharpe": w.oos_sharpe,
+                "is_upi": w.is_upi,
+                "oos_upi": w.oos_upi,
+                "oos_ulcer_index": w.oos_ulcer_index,
                 "oos_max_dd": w.oos_max_dd,
             }
             for w in report.walk_forward
+        ],
+        "walk_forward_anchored": [
+            {
+                "window": w.window,
+                "scheme": w.scheme,
+                "is_sharpe": w.is_sharpe,
+                "oos_sharpe": w.oos_sharpe,
+                "is_upi": w.is_upi,
+                "oos_upi": w.oos_upi,
+                "oos_ulcer_index": w.oos_ulcer_index,
+                "oos_max_dd": w.oos_max_dd,
+            }
+            for w in report.walk_forward_anchored
         ],
     }
     print(json.dumps(payload, indent=2))
@@ -136,33 +156,48 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             cfg,
             bars,
             n_windows=args.windows,
+            metric=getattr(args, "metric", "upi"),
         )
         payload: Dict[str, Any] = {
             "mode": "candidates",
+            "metric": getattr(args, "metric", "upi"),
             "winner": winner.name,
+            "winner_composite_oos_upi": winner.composite_oos_upi,
+            "winner_rolling_mean_oos_upi": winner.rolling_mean_oos_upi,
+            "winner_anchored_mean_oos_upi": winner.anchored_mean_oos_upi,
+            "winner_min_scheme_oos_upi": winner.min_scheme_oos_upi,
+            "winner_full_upi": winner.full_upi,
             "winner_mean_oos_sharpe": winner.mean_oos_sharpe,
             "winner_median_oos_sharpe": winner.median_oos_sharpe,
             "winner_full": winner.full,
             "winner_holdout_sharpe": winner.holdout_sharpe,
+            "winner_holdout_upi": winner.holdout_upi,
             "winner_ensemble": winner.ensemble,
             "candidates": [
                 {
                     "name": r.name,
-                    "mean_oos_sharpe": r.mean_oos_sharpe,
-                    "median_oos_sharpe": r.median_oos_sharpe,
-                    "mean_is_sharpe": r.mean_is_sharpe,
+                    "composite_oos_upi": r.composite_oos_upi,
+                    "rolling_mean_oos_upi": r.rolling_mean_oos_upi,
+                    "anchored_mean_oos_upi": r.anchored_mean_oos_upi,
+                    "min_scheme_oos_upi": r.min_scheme_oos_upi,
+                    "full_upi": r.full_upi,
+                    "full_ulcer_index": r.full.get("ulcer_index"),
                     "full_sharpe": r.full.get("sharpe"),
                     "full_return": r.full.get("total_return"),
                     "n_fills": r.full.get("n_fills"),
+                    "mean_oos_sharpe": r.mean_oos_sharpe,
+                    "holdout_upi": r.holdout_upi,
                     "holdout_sharpe": r.holdout_sharpe,
-                    "oos_sharpes": r.oos_sharpes,
+                    "rolling_oos_upis": r.rolling_oos_upis,
+                    "anchored_oos_upis": r.anchored_oos_upis,
                 }
                 for r in ranked
             ],
             "notes": [
                 "Candidates are pre-specified economic variants (not free Optuna).",
-                "Winner maximises nested purged mean OOS Sharpe among the fixed menu.",
-                "Free Optuna on IS often fails to beat baseline on nested OOS for single-name HG.",
+                "Default ranking uses Ulcer Performance Index on rolling + anchored purged OOS.",
+                "composite_oos_upi = 0.5*rolling_mean + 0.5*anchored_mean; "
+                "tie-break with min(scheme) for robustness.",
             ],
             "n_bars": len(bars),
             "date_start": str(bars[0].timestamp) if bars else None,
@@ -185,17 +220,30 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             payload["post_apply_validation"] = {
                 "full": v.full,
                 "mean_oos_sharpe": v.mean_oos_sharpe,
+                "mean_oos_upi": v.mean_oos_upi,
+                "mean_anchored_oos_upi": v.mean_anchored_oos_upi,
+                "composite_oos_upi": v.composite_oos_upi,
                 "mean_is_sharpe": v.mean_is_sharpe,
                 "passed": v.passed,
-                "notes": v.notes[:6],
+                "notes": v.notes[:8],
                 "walk_forward": [
                     {
                         "window": w.window,
+                        "scheme": w.scheme,
                         "is_sharpe": w.is_sharpe,
                         "oos_sharpe": w.oos_sharpe,
+                        "oos_upi": w.oos_upi,
                         "oos_max_dd": w.oos_max_dd,
                     }
                     for w in v.walk_forward
+                ],
+                "walk_forward_anchored": [
+                    {
+                        "window": w.window,
+                        "oos_upi": w.oos_upi,
+                        "oos_sharpe": w.oos_sharpe,
+                    }
+                    for w in v.walk_forward_anchored
                 ],
             }
         print(json.dumps(payload, indent=2, default=str))
@@ -305,6 +353,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     opt.add_argument("--trials", type=int, default=None, help="Override trials per window")
     opt.add_argument("--windows", type=int, default=None, help="Override WFA window count")
+    opt.add_argument(
+        "--metric",
+        choices=["upi", "sharpe"],
+        default="upi",
+        help="Candidate ranking metric (default: Ulcer Performance Index dual WFA)",
+    )
     opt.add_argument(
         "--apply",
         action="store_true",

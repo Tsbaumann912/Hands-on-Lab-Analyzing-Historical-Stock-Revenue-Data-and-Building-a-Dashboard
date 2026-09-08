@@ -173,6 +173,43 @@ def test_nested_optimize_synthetic_runs() -> None:
     assert np.isfinite(report.mean_oos_sharpe)
 
 
+def test_ulcer_metrics_on_monotonic_equity() -> None:
+    from copper_ensemble.engine import ulcer_index, ulcer_performance_index
+
+    eq = np.cumprod(1.0 + np.full(252, 0.001)) * 100_000.0
+    assert ulcer_index(eq) < 1e-6
+    assert ulcer_performance_index(eq) > 0.0
+    # Drawdown path → positive UI
+    eq2 = eq.copy()
+    eq2[100:150] = eq2[99] * 0.9
+    assert ulcer_index(eq2) > 1.0
+
+
+def test_anchored_and_rolling_slices() -> None:
+    from copper_ensemble.optimize import anchored_window_slices, rolling_window_slices
+
+    roll = rolling_window_slices(2000, 4, 0.7, 5)
+    anch = anchored_window_slices(2000, 4, min_is_bars=500, purge=5)
+    assert len(roll) >= 3
+    assert len(anch) >= 3
+    # Anchored IS always starts at 0
+    assert all(s[0] == 0 for s in anch)
+    # Rolling blocks move forward
+    assert roll[0][0] < roll[-1][0]
+
+
+def test_candidate_selection_upi_metric() -> None:
+    from copper_ensemble.optimize import select_pre_specified_candidates
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(1400, seed=12), "HG")
+    winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3, metric="upi")
+    assert winner.name
+    assert hasattr(winner, "composite_oos_upi")
+    assert len(ranked) == 6
+    assert np.isfinite(winner.composite_oos_upi)
+
+
 def test_halt_cooldown_resumes() -> None:
     from copper_ensemble.risk import RiskManager
 

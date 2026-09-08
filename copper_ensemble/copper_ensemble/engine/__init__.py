@@ -31,9 +31,56 @@ class BacktestResult:
     metrics: Dict[str, float] = field(default_factory=dict)
 
 
+def ulcer_index(equity: np.ndarray) -> float:
+    """
+    Peter Martin Ulcer Index from an equity curve.
+
+    Percentage drawdowns from running peak → RMS. Returned in **percent** units
+    (e.g. 5.0 means 5%).
+    """
+    if equity.size < 2:
+        return 0.0
+    peak = np.maximum.accumulate(equity)
+    # Percent drawdown series (0 at peaks, positive when underwater)
+    dd_pct = 100.0 * (peak - equity) / np.maximum(peak, 1e-12)
+    return float(np.sqrt(np.mean(np.square(dd_pct))))
+
+
+def ulcer_performance_index(
+    equity: np.ndarray,
+    *,
+    periods_per_year: float = 252.0,
+    risk_free_annual: float = 0.0,
+) -> float:
+    """
+    Ulcer Performance Index = (ann. return % − R_f %) / Ulcer Index.
+
+    Higher is better: reward for return per unit of drawdown pain.
+    """
+    if equity.size < 3 or equity[0] <= 0:
+        return 0.0
+    n = float(equity.size - 1)
+    total = float(equity[-1] / equity[0])
+    if total <= 0:
+        return -10.0
+    ann = total ** (periods_per_year / max(n, 1.0)) - 1.0
+    ann_pct = 100.0 * (ann - risk_free_annual)
+    ui = ulcer_index(equity)
+    if ui < 1e-9:
+        return 10.0 if ann_pct > 0 else (-10.0 if ann_pct < 0 else 0.0)
+    return float(ann_pct / ui)
+
+
 def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
     if equity.size < 3:
-        return {"sharpe": 0.0, "max_drawdown": 0.0, "total_return": 0.0}
+        return {
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "total_return": 0.0,
+            "ulcer_index": 0.0,
+            "upi": 0.0,
+            "cagr": 0.0,
+        }
     rets = np.diff(equity) / equity[:-1]
     rets = rets[np.isfinite(rets)]
     mu = float(np.mean(rets)) if rets.size else 0.0
@@ -41,12 +88,20 @@ def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
     sharpe = (mu / sd * np.sqrt(252.0)) if sd > 1e-12 else 0.0
     peak = np.maximum.accumulate(equity)
     dd = 1.0 - equity / np.maximum(peak, 1e-12)
+    total_return = float(equity[-1] / equity[0] - 1.0)
+    n = float(equity.size - 1)
+    cagr = float((equity[-1] / equity[0]) ** (252.0 / max(n, 1.0)) - 1.0) if equity[0] > 0 else 0.0
+    ui = ulcer_index(equity)
+    upi = ulcer_performance_index(equity)
     return {
         "sharpe": float(sharpe),
         "max_drawdown": float(np.max(dd)),
-        "total_return": float(equity[-1] / equity[0] - 1.0),
+        "total_return": total_return,
         "end_equity": float(equity[-1]),
         "n_bars": float(equity.size),
+        "ulcer_index": float(ui),
+        "upi": float(upi),
+        "cagr": float(cagr),
     }
 
 

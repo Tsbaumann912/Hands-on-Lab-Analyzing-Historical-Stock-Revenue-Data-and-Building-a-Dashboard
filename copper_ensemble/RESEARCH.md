@@ -40,6 +40,25 @@ This package implements a CTA-style copper algorithm that is **not** part of Qua
 
 This project therefore treats `target_mean_oos_sharpe: 1.5` as an **aspirational gate that single-name HG is expected to fail**, and surfaces that failure explicitly in validation notes.
 
+## Ulcer Performance Index + dual walk-forward
+
+Selection now defaults to **Ulcer Performance Index (UPI)** on both schemes:
+
+- **Ulcer Index** = RMS of percent drawdowns from running peak (Martin).
+- **UPI** = annualised return % / Ulcer Index (higher = more return per unit of pain).
+- **Rolling WFA** — consecutive purged IS/OOS blocks.
+- **Anchored WFA** — expanding IS from t=0; fixed-length purged OOS windows.
+
+Ranking key for the fixed candidate menu:
+
+`composite_oos_upi = 0.5·mean(rolling OOS UPI) + 0.5·mean(anchored OOS UPI)`,
+then `min(rolling, anchored)` for robustness, then full-sample UPI.
+
+```bash
+python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates --metric upi
+python -m copper_ensemble.cli validate --start 2008-01-01
+```
+
 ## Robust optimisation (anti-overfit)
 
 Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):

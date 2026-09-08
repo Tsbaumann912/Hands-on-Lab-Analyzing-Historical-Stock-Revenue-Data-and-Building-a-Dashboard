@@ -128,6 +128,8 @@ def params_to_config(base: Config, params: Mapping[str, Any]) -> Config:
 def _is_objective_score(metrics: Mapping[str, float], space: Mapping[str, Any]) -> float:
     dd_cap = float(space.get("max_dd_soft_cap", 0.25))
     min_fills = float(space.get("min_fills", 8))
+    # Prefer Ulcer Performance Index (return per drawdown pain); fall back to Sharpe.
+    upi = float(metrics.get("upi", 0.0))
     sharpe = float(metrics.get("sharpe", 0.0))
     dd = float(metrics.get("max_drawdown", 1.0))
     fills = float(metrics.get("n_fills", 0.0))
@@ -138,7 +140,8 @@ def _is_objective_score(metrics: Mapping[str, float], space: Mapping[str, Any]) 
         penalty += 3.0 * (dd - dd_cap)
     if dd > 0.40:
         return -8.0
-    return sharpe - penalty
+    # Scale UPI into a similar numeric range as Sharpe for TPE
+    return upi - penalty + 0.05 * sharpe
 
 
 def _window_slices(
@@ -147,7 +150,22 @@ def _window_slices(
     is_ratio: float,
     purge: int,
 ) -> List[Tuple[int, int, int, int]]:
-    """Return (is_start, is_end, oos_start, oos_end) index slices per block."""
+    """Rolling (non-overlapping block) purged WFA slices."""
+    return rolling_window_slices(n, n_windows, is_ratio, purge)
+
+
+def rolling_window_slices(
+    n: int,
+    n_windows: int,
+    is_ratio: float,
+    purge: int,
+) -> List[Tuple[int, int, int, int]]:
+    """
+    Rolling purged walk-forward: consecutive non-overlapping blocks.
+
+    Each block is split into IS then purged OOS. Returns
+    ``(is_start, is_end, oos_start, oos_end)``.
+    """
     out: List[Tuple[int, int, int, int]] = []
     if n_windows < 1 or n < 100:
         return out
@@ -166,9 +184,48 @@ def _window_slices(
     return out
 
 
-def _run_sharpe(cfg: Config, bars: Sequence[Bar]) -> Dict[str, float]:
+def anchored_window_slices(
+    n: int,
+    n_windows: int,
+    *,
+    min_is_bars: int = 504,
+    oos_bars: Optional[int] = None,
+    purge: int = 5,
+) -> List[Tuple[int, int, int, int]]:
+    """
+    Anchored (expanding) purged walk-forward.
+
+    IS always starts at bar 0 and expands; OOS is the next fixed-length block
+    after a purge gap. Returns ``(is_start, is_end, oos_start, oos_end)``.
+    """
+    out: List[Tuple[int, int, int, int]] = []
+    if n_windows < 1 or n < min_is_bars + 80:
+        return out
+    # Reserve room for n_windows OOS segments after min IS
+    remaining = n - min_is_bars
+    oos_len = int(oos_bars) if oos_bars is not None else max(remaining // max(n_windows, 1), 60)
+    # Place OOS starts evenly from min_is to near the end
+    last_oos_start = n - oos_len
+    if last_oos_start <= min_is_bars:
+        return out
+    starts = np.linspace(min_is_bars, last_oos_start, num=n_windows)
+    for w, oos_start_f in enumerate(starts):
+        oos_start = int(round(oos_start_f)) + purge
+        oos_end = min(oos_start + oos_len, n)
+        is_end = max(oos_start - purge, min_is_bars)
+        is_start = 0
+        if is_end - is_start < 80 or oos_end - oos_start < 40:
+            continue
+        out.append((is_start, is_end, oos_start, oos_end))
+    return out
+
+
+def _run_metrics(cfg: Config, bars: Sequence[Bar]) -> Dict[str, float]:
     return BacktestEngine(cfg).run(list(bars)).metrics
 
+
+def _run_sharpe(cfg: Config, bars: Sequence[Bar]) -> Dict[str, float]:
+    return _run_metrics(cfg, bars)
 
 def optimize_window(
     base: Config,
@@ -419,6 +476,19 @@ class CandidateResult:
     holdout_return: float
     oos_sharpes: List[float]
     ensemble: Dict[str, Any]
+    # UPI dual-WFA fields
+    rolling_mean_oos_upi: float = 0.0
+    anchored_mean_oos_upi: float = 0.0
+    composite_oos_upi: float = 0.0
+    min_scheme_oos_upi: float = 0.0
+    rolling_median_oos_upi: float = 0.0
+    anchored_median_oos_upi: float = 0.0
+    rolling_oos_upis: List[float] = field(default_factory=list)
+    anchored_oos_upis: List[float] = field(default_factory=list)
+    holdout_upi: float = 0.0
+    full_upi: float = 0.0
+    rolling_mean_oos_return: float = 0.0
+    anchored_mean_oos_return: float = 0.0
 
 
 def _baseline_ensemble_dict(cfg: Config) -> Dict[str, Any]:
@@ -540,6 +610,28 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
     ]
 
 
+def _score_slices_upi(
+    cfg: Config,
+    bars: List[Bar],
+    slices: Sequence[Tuple[int, int, int, int]],
+) -> Tuple[List[float], List[float], List[float], List[float], List[float]]:
+    """Return OOS UPIs, IS UPIs, OOS returns, OOS Sharpes, IS Sharpes."""
+    oos_upi: List[float] = []
+    is_upi: List[float] = []
+    oos_ret: List[float] = []
+    oos_sharpe: List[float] = []
+    is_sharpe: List[float] = []
+    for is0, is1, oos0, oos1 in slices:
+        is_m = _run_metrics(cfg, bars[is0:is1])
+        oos_m = _run_metrics(cfg, bars[oos0:oos1])
+        is_upi.append(float(is_m.get("upi", 0.0)))
+        oos_upi.append(float(oos_m.get("upi", 0.0)))
+        oos_ret.append(float(oos_m.get("total_return", 0.0)))
+        oos_sharpe.append(float(oos_m.get("sharpe", 0.0)))
+        is_sharpe.append(float(is_m.get("sharpe", 0.0)))
+    return oos_upi, is_upi, oos_ret, oos_sharpe, is_sharpe
+
+
 def select_pre_specified_candidates(
     base: Config,
     bars: List[Bar],
@@ -547,12 +639,16 @@ def select_pre_specified_candidates(
     n_windows: Optional[int] = None,
     is_ratio: float = 0.70,
     purge: int = 5,
+    metric: str = "upi",
 ) -> Tuple[CandidateResult, List[CandidateResult]]:
     """
-    Score a fixed candidate menu on nested purged OOS; return winner + all rows.
+    Score a fixed candidate menu on nested purged OOS.
 
-    Winner rule: max mean OOS Sharpe, then median OOS, then anchored holdout Sharpe.
-    Window count defaults to long-history setting (≥3000 bars → 8) to match validate.
+    Default ``metric='upi'`` ranks by dual-scheme Ulcer Performance Index:
+    rolling + anchored mean OOS UPI (composite), with robustness via
+    ``min(rolling, anchored)``.
+
+    ``metric='sharpe'`` preserves the prior Sharpe-only rolling ranking.
     """
     if n_windows is None:
         n_windows = (
@@ -560,8 +656,15 @@ def select_pre_specified_candidates(
             if len(bars) >= base.backtest.long_history_bars
             else base.backtest.walk_forward_windows
         )
-    slices = _window_slices(len(bars), int(n_windows), is_ratio, purge)
-    if not slices:
+    n_windows = int(n_windows)
+    rolling_slices = rolling_window_slices(len(bars), n_windows, is_ratio, purge)
+    anchored_slices = anchored_window_slices(
+        len(bars),
+        n_windows,
+        min_is_bars=max(504, int(len(bars) * 0.25)),
+        purge=purge,
+    )
+    if not rolling_slices:
         raise ValueError("series too short for candidate WFA")
 
     split = int(len(bars) * 0.70)
@@ -569,30 +672,70 @@ def select_pre_specified_candidates(
     results: List[CandidateResult] = []
 
     for name, cfg in build_default_candidates(base):
-        oos: List[float] = []
-        is_s: List[float] = []
-        for is0, is1, oos0, oos1 in slices:
-            is_s.append(float(_run_sharpe(cfg, bars[is0:is1]).get("sharpe", 0.0)))
-            oos.append(float(_run_sharpe(cfg, bars[oos0:oos1]).get("sharpe", 0.0)))
-        full = _run_sharpe(cfg, bars)
-        hold = _run_sharpe(cfg, hold_bars)
+        r_oos_upi, r_is_upi, r_oos_ret, r_oos_sh, r_is_sh = _score_slices_upi(
+            cfg, bars, rolling_slices
+        )
+        if anchored_slices:
+            a_oos_upi, _a_is_upi, a_oos_ret, _a_oos_sh, _a_is_sh = _score_slices_upi(
+                cfg, bars, anchored_slices
+            )
+        else:
+            a_oos_upi, a_oos_ret = [], []
+
+        full = _run_metrics(cfg, bars)
+        hold = _run_metrics(cfg, hold_bars)
+
+        roll_mean_upi = float(np.mean(r_oos_upi)) if r_oos_upi else 0.0
+        anch_mean_upi = float(np.mean(a_oos_upi)) if a_oos_upi else roll_mean_upi
+        composite = 0.5 * roll_mean_upi + 0.5 * anch_mean_upi
+        min_scheme = float(min(roll_mean_upi, anch_mean_upi))
+
+        mean_oos_sh = float(np.mean(r_oos_sh)) if r_oos_sh else 0.0
+        med_oos_sh = float(np.median(r_oos_sh)) if r_oos_sh else 0.0
+        mean_is_sh = float(np.mean(r_is_sh)) if r_is_sh else 0.0
+
         results.append(
             CandidateResult(
                 name=name,
-                mean_oos_sharpe=float(np.mean(oos)),
-                median_oos_sharpe=float(np.median(oos)),
-                mean_is_sharpe=float(np.mean(is_s)),
+                mean_oos_sharpe=mean_oos_sh,
+                median_oos_sharpe=med_oos_sh,
+                mean_is_sharpe=mean_is_sh,
                 full=dict(full),
                 holdout_sharpe=float(hold.get("sharpe", 0.0)),
                 holdout_return=float(hold.get("total_return", 0.0)),
-                oos_sharpes=oos,
+                oos_sharpes=r_oos_sh,
                 ensemble=_baseline_ensemble_dict(cfg),
+                rolling_mean_oos_upi=roll_mean_upi,
+                anchored_mean_oos_upi=anch_mean_upi,
+                composite_oos_upi=composite,
+                min_scheme_oos_upi=min_scheme,
+                rolling_median_oos_upi=float(np.median(r_oos_upi)) if r_oos_upi else 0.0,
+                anchored_median_oos_upi=float(np.median(a_oos_upi)) if a_oos_upi else 0.0,
+                rolling_oos_upis=r_oos_upi,
+                anchored_oos_upis=a_oos_upi,
+                holdout_upi=float(hold.get("upi", 0.0)),
+                full_upi=float(full.get("upi", 0.0)),
+                rolling_mean_oos_return=float(np.mean(r_oos_ret)) if r_oos_ret else 0.0,
+                anchored_mean_oos_return=float(np.mean(a_oos_ret)) if a_oos_ret else 0.0,
             )
         )
 
-    ranked = sorted(
-        results,
-        key=lambda r: (r.mean_oos_sharpe, r.median_oos_sharpe, r.holdout_sharpe),
-        reverse=True,
-    )
+    if metric == "sharpe":
+        ranked = sorted(
+            results,
+            key=lambda r: (r.mean_oos_sharpe, r.median_oos_sharpe, r.holdout_sharpe),
+            reverse=True,
+        )
+    else:
+        # Profitable + robust: composite UPI, then worst-scheme UPI, then full UPI
+        ranked = sorted(
+            results,
+            key=lambda r: (
+                r.composite_oos_upi,
+                r.min_scheme_oos_upi,
+                r.full_upi,
+                r.holdout_upi,
+            ),
+            reverse=True,
+        )
     return ranked[0], ranked

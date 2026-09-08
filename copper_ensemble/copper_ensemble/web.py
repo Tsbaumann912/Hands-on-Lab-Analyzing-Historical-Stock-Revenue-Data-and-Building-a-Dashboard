@@ -189,12 +189,14 @@ DASHBOARD_HTML = """
 
     function renderMetrics(m, v) {
       const items = [
+        ['UPI (full)', fmt(m.upi, 3), m.upi >= 0 ? 'good' : 'bad'],
+        ['Composite OOS UPI', fmt(v.composite_oos_upi, 3), v.composite_oos_upi >= 0 ? 'good' : 'bad'],
+        ['Rolling OOS UPI', fmt(v.mean_oos_upi, 3), v.mean_oos_upi >= 0 ? 'good' : 'bad'],
+        ['Anchored OOS UPI', fmt(v.mean_anchored_oos_upi, 3), v.mean_anchored_oos_upi >= 0 ? 'good' : 'bad'],
         ['Sharpe', fmt(m.sharpe, 3), m.sharpe >= 0 ? 'good' : 'bad'],
-        ['Mean OOS Sharpe', fmt(v.mean_oos_sharpe, 3), v.target_oos_met ? 'good' : 'bad'],
-        ['Target OOS 1.5', v.target_oos_met ? 'MET' : 'NOT MET', v.target_oos_met ? 'good' : 'bad'],
+        ['Ulcer Index', fmt(m.ulcer_index, 2) + '%', ''],
         ['Total return', pct(m.total_return), m.total_return >= 0 ? 'good' : 'bad'],
         ['Max DD', pct(m.max_drawdown), 'bad'],
-        ['End equity', '$' + fmt(m.end_equity, 0), ''],
         ['Fills', fmt(m.n_fills, 0), ''],
         ['Gates', v.passed ? 'PASSED' : 'FAILED', v.passed ? 'good' : 'bad'],
       ];
@@ -235,14 +237,24 @@ DASHBOARD_HTML = """
 
     function renderGates(v) {
       const rows = (v.walk_forward || []).map(w =>
-        `<tr><td>W${w.window}</td><td>${fmt(w.is_sharpe,3)}</td><td>${fmt(w.oos_sharpe,3)}</td><td>${pct(w.oos_max_dd)}</td></tr>`
+        `<tr><td>R${w.window}</td><td>${fmt(w.is_upi,3)}</td><td>${fmt(w.oos_upi,3)}</td><td>${fmt(w.oos_sharpe,3)}</td><td>${pct(w.oos_max_dd)}</td></tr>`
+      ).join('');
+      const arows = (v.walk_forward_anchored || []).map(w =>
+        `<tr><td>A${w.window}</td><td>${fmt(w.is_upi,3)}</td><td>${fmt(w.oos_upi,3)}</td><td>${fmt(w.oos_sharpe,3)}</td><td>${pct(w.oos_max_dd)}</td></tr>`
       ).join('');
       document.getElementById('gates').innerHTML = `
-        <p>Status: <span class="${v.passed ? 'pass' : 'fail'}">${v.passed ? 'PASSED' : 'FAILED'}</span></p>
+        <p>Status: <span class="${v.passed ? 'pass' : 'fail'}">${v.passed ? 'PASSED' : 'FAILED'}</span>
+        · Composite OOS UPI: <b>${fmt(v.composite_oos_upi,3)}</b></p>
         <ul>${(v.notes || []).map(n => `<li>${n}</li>`).join('')}</ul>
+        <h3 style="margin-top:1rem;font-size:0.95rem;color:#8b9bb0">Rolling WFA</h3>
         <table>
-          <thead><tr><th>Window</th><th>IS Sharpe</th><th>OOS Sharpe</th><th>OOS Max DD</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="4">No WFA windows</td></tr>'}</tbody>
+          <thead><tr><th>Win</th><th>IS UPI</th><th>OOS UPI</th><th>OOS Sharpe</th><th>OOS Max DD</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5">No rolling windows</td></tr>'}</tbody>
+        </table>
+        <h3 style="margin-top:1rem;font-size:0.95rem;color:#8b9bb0">Anchored WFA</h3>
+        <table>
+          <thead><tr><th>Win</th><th>IS UPI</th><th>OOS UPI</th><th>OOS Sharpe</th><th>OOS Max DD</th></tr></thead>
+          <tbody>${arows || '<tr><td colspan="5">No anchored windows</td></tr>'}</tbody>
         </table>`;
     }
 
@@ -348,17 +360,37 @@ def api_run() -> Any:
             "oos_retention": report.oos_retention,
             "mean_oos_sharpe": report.mean_oos_sharpe,
             "mean_is_sharpe": report.mean_is_sharpe,
+            "mean_oos_upi": report.mean_oos_upi,
+            "mean_anchored_oos_upi": report.mean_anchored_oos_upi,
+            "composite_oos_upi": report.composite_oos_upi,
             "target_oos_met": report.target_oos_met,
             "notes": report.notes,
             "ablations": report.ablations,
             "walk_forward": [
                 {
                     "window": w.window,
+                    "scheme": w.scheme,
                     "is_sharpe": w.is_sharpe,
                     "oos_sharpe": w.oos_sharpe,
+                    "is_upi": w.is_upi,
+                    "oos_upi": w.oos_upi,
+                    "oos_ulcer_index": w.oos_ulcer_index,
                     "oos_max_dd": w.oos_max_dd,
                 }
                 for w in report.walk_forward
+            ],
+            "walk_forward_anchored": [
+                {
+                    "window": w.window,
+                    "scheme": w.scheme,
+                    "is_sharpe": w.is_sharpe,
+                    "oos_sharpe": w.oos_sharpe,
+                    "is_upi": w.is_upi,
+                    "oos_upi": w.oos_upi,
+                    "oos_ulcer_index": w.oos_ulcer_index,
+                    "oos_max_dd": w.oos_max_dd,
+                }
+                for w in report.walk_forward_anchored
             ],
         }
         return jsonify(
