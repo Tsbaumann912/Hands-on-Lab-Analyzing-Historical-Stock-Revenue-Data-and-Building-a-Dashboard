@@ -1,0 +1,54 @@
+# Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
+contract:
+  symbol: HG
+  name: Copper
+  yfinance_ticker: HG=F
+  multiplier: 25000.0
+  tick_size: 0.0005
+  tick_value: 12.50
+  commission_per_contract: 2.25
+  slippage_ticks: 1
+
+ensemble:
+  horizons_days: [21, 63, 252]
+  weights:
+    tsmom: 0.30
+    carry: 0.25
+    basis_mom: 0.20
+    inventory: 0.15
+    fade: 0.10
+  forecast_cap: 20.0
+  agreement_min: 0.40
+  fdm_cap: 2.5
+  vol_target_annual: 0.12
+  ewma_vol_com_days: 60
+  fade_z: 2.0
+  buffer_forecast: 2.0
+  kelly_fraction: 0.35
+  inventory_sma: 60
+  inventory_delta_days: 20
+  basis_mom_lookback: 63
+  price_z_lookback: 20
+  atr_period: 14
+  stop_atr_mult: 2.0
+  take_profit_atr_mult: 4.0
+
+risk:
+  max_daily_drawdown_pct: 0.03
+  max_position_size_pct: 0.50
+  max_leverage: 5.0
+  max_contracts: 20
+  halt_on_breach: true
+
+portfolio:
+  # HG notional ≈ price × 25,000 (~$100k/contract at $4/lb); size for ≥1 lot.
+  initial_cash: 500000.0
+
+backtest:
+  walk_forward_windows: 4
+  in_sample_ratio: 0.70
+  purge_bars: 5
+
+validation:
+  dsr_pass_threshold: 0.95
+  oos_retention_min: 0.60
