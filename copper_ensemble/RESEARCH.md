@@ -54,11 +54,13 @@ Ranking key for the fixed candidate menu:
 `composite_oos_upi = 0.5·mean(rolling OOS UPI) + 0.5·mean(anchored OOS UPI)`,
 then `min(rolling, anchored)` for robustness, then full-sample UPI.
 
-**2008→now Yahoo HG result:** winner `C_no_fade_long_h`
-(composite OOS UPI ≈ **0.275**; rolling ≈ −0.167, anchored ≈ **0.716**;
-full-sample UPI ≈ 0.113, Ulcer Index ≈ 10.0%, return ≈ 23%). Same economic
-config also led under Sharpe-only ranking — UPI confirms it is the most
-return-per-pain robust menu member across both WFA schemes.
+**2008→now Yahoo HG result (with StochRSI + Fast/Slow MA sleeves, `max_position_size_pct=5`):**
+winner `G_ma_stoch_heavy`
+(composite OOS UPI ≈ **0.809**; rolling ≈ **0.508**, anchored ≈ **1.111**;
+full-sample UPI ≈ 0.126, return ≈ **40%**, Sharpe ≈ 0.23).
+
+Previous winner without MA/Stoch sleeves (`C_no_fade_long_h`) remains second
+(composite ≈ 0.73 under the same risk sizing).
 
 ```bash
 python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates --metric upi
@@ -72,8 +74,9 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
 2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
-**Production choice (2008→now):** `C_no_fade_long_h` — fade sleeve off, TSMOM horizons `[63, 126, 252]`.
-Wins under both Sharpe and UPI dual-WFA ranking. Anchored OOS UPI is strongly positive while rolling remains weak — composite still tops the menu.
+**Production choice (2008→now):** `G_ma_stoch_heavy` — Fast/Slow MA + Stochastic RSI overweight,
+fade off, horizons `[63, 126, 252]`, `max_position_size_pct=5`.
+Leads UPI dual-WFA (composite ≈ 0.81) vs prior `C_no_fade_long_h` (≈ 0.73) under the same protocol.
 
 ## Run
 

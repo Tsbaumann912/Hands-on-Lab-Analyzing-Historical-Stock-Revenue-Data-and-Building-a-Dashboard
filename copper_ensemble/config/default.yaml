@@ -1,5 +1,6 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
-# Production book: UPI dual-WFA + StochRSI / Fast–Slow MA sleeves.
+# UPI dual-WFA winner (2008→now): G_ma_stoch_heavy
+# (Fast/Slow MA + Stochastic RSI sleeves; max_position_size_pct = 5).
 contract:
   symbol: HG
   name: Copper
@@ -13,13 +14,13 @@ contract:
 ensemble:
   horizons_days: [63, 126, 252]
   weights:
-    tsmom: 0.40
-    carry: 0.12
-    basis_mom: 0.12
-    inventory: 0.08
+    tsmom: 0.30
+    carry: 0.08
+    basis_mom: 0.08
+    inventory: 0.06
     fade: 0.0
-    ma_cross: 0.15
-    stoch_rsi: 0.13
+    ma_cross: 0.28
+    stoch_rsi: 0.20
   forecast_cap: 20.0
   agreement_min: 0.20
   fdm_cap: 2.0
@@ -35,7 +36,7 @@ ensemble:
   atr_period: 14
   stop_atr_mult: 2.0
   take_profit_atr_mult: 4.0
-  # Fast / Slow moving averages (SMA on close)
+  # Fast / Slow SMA
   fast_ma_period: 10
   slow_ma_period: 50
   # Stochastic RSI
@@ -48,7 +49,6 @@ ensemble:
 
 risk:
   max_daily_drawdown_pct: 0.15
-  # User-requested: allow up to 5× equity notional (leverage cap still applies).
   max_position_size_pct: 5.0
   max_leverage: 5.0
   max_contracts: 20
