@@ -177,13 +177,54 @@ class BacktestEngine:
         fills: List[Fill] = []
         signals: List[Signal] = []
         prev_close = bars[0].close
+        active_stop: Optional[float] = None
+        active_tp: Optional[float] = None
 
         for i, bar in enumerate(bars):
-            # MTM
+            # MTM to close first (path-independent baseline); stop/TP may flatten mid-bar.
             prior_equity = equity
             if i > 0:
                 equity += position * mult * (bar.close - prev_close)
             risk.update_equity(equity, bar.timestamp, prior_equity=prior_equity)
+
+            # Enforce per-trade stop / take-profit against bar high/low.
+            exited_by_bracket = False
+            if position != 0.0 and (active_stop is not None or active_tp is not None):
+                hit_px: Optional[float] = None
+                if position > 0:
+                    if active_stop is not None and bar.low <= active_stop:
+                        hit_px = float(active_stop)
+                    elif active_tp is not None and bar.high >= active_tp:
+                        hit_px = float(active_tp)
+                else:
+                    if active_stop is not None and bar.high >= active_stop:
+                        hit_px = float(active_stop)
+                    elif active_tp is not None and bar.low <= active_tp:
+                        hit_px = float(active_tp)
+                if hit_px is not None:
+                    # Rewind close MTM and mark exit at bracket price instead.
+                    if i > 0:
+                        equity -= position * mult * (bar.close - prev_close)
+                        equity += position * mult * (hit_px - prev_close)
+                    delta = -position
+                    trade_px = hit_px + slip if delta > 0 else hit_px - slip
+                    cost = abs(delta) * commission
+                    equity -= cost
+                    equity -= abs(delta) * mult * abs(trade_px - hit_px)
+                    fills.append(
+                        Fill(
+                            timestamp=bar.timestamp,
+                            direction=Direction.LONG if delta > 0 else Direction.SHORT,
+                            quantity=abs(delta),
+                            price=trade_px,
+                            commission=cost,
+                        )
+                    )
+                    position = 0.0
+                    active_stop = None
+                    active_tp = None
+                    exited_by_bracket = True
+                    risk.update_equity(equity, bar.timestamp, prior_equity=prior_equity)
 
             raw_sig = strat.signal_at(i)
             decision = risk.evaluate(raw_sig, bar.close)
@@ -191,16 +232,17 @@ class BacktestEngine:
             signals.append(sig)
 
             target = 0.0
-            if sig.direction == Direction.LONG:
-                target = float(sig.suggested_size or 0.0)
-            elif sig.direction == Direction.SHORT:
-                target = -float(sig.suggested_size or 0.0)
+            if not exited_by_bracket:
+                if sig.direction == Direction.LONG:
+                    target = float(sig.suggested_size or 0.0)
+                elif sig.direction == Direction.SHORT:
+                    target = -float(sig.suggested_size or 0.0)
+            # If bracket flattened, stay flat this bar (no re-entry same bar).
 
             delta = target - position
             if abs(delta) >= 1.0:
                 trade_px = bar.close + slip if delta > 0 else bar.close - slip
                 cost = abs(delta) * commission
-                # cash impact of paying commission; entry mark at close already in MTM path
                 equity -= cost
                 fills.append(
                     Fill(
@@ -211,8 +253,14 @@ class BacktestEngine:
                         commission=cost,
                     )
                 )
-                # slippage cash vs mid
                 equity -= abs(delta) * mult * abs(trade_px - bar.close)
+                # Update bracket levels when opening / flipping; clear when flat.
+                if target == 0.0:
+                    active_stop = None
+                    active_tp = None
+                elif np.sign(target) != np.sign(position) or position == 0.0:
+                    active_stop = sig.stop_loss
+                    active_tp = sig.take_profit
                 position = target
 
             eq_curve[i] = equity

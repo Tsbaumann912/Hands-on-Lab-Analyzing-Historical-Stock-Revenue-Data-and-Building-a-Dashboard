@@ -281,6 +281,10 @@ def test_yearly_profit_lock_all_green_on_config() -> None:
     assert not losing, f"losing years: {losing}"
     assert float(result.metrics.get("n_losing_years", 1)) == 0.0
     assert float(result.metrics.get("min_year_return", -1)) > 0.0
+    # Retuned TP/stop book should beat the prior ~20% lock-only total return.
+    assert float(result.metrics.get("total_return", 0.0)) >= 0.25
+    assert cfg.ensemble.take_profit_atr_mult >= 6.0
+    assert cfg.ensemble.stop_atr_mult >= 3.0
 
 
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:

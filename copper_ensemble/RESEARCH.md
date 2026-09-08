@@ -77,15 +77,16 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 **Production choice (2008→now):** `H_yearly_profit` — prioritises **positive return every calendar year** via:
 
 1. Shorter horizons `[21, 63]`, high agreement (0.50), TSMOM + MA + StochRSI blend.
-2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.1%) after
-   `yearly_profit_lock_min_days`, flatten for the rest of the year; also lock any
-   still-green year from November onward (`yearly_nov_protect`).
+2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.2%) after
+   `yearly_profit_lock_min_days`, flatten for the rest of the year.
+3. **Enforced ATR stop / take-profit** in the backtest engine (`stop_atr_mult=4`,
+   `take_profit_atr_mult=10`) plus system drawdown halt (`max_daily_drawdown_pct=0.15`).
 
-On Yahoo HG 2008→now this posts **profit in every calendar year** (min year ≈ +0.25%,
-total ≈ +20%, UPI ≈ 2.3). Trade-off vs `G_ma_stoch_heavy`: lower cumulative return
-(~20% vs ~40%) in exchange for eliminating losing years. This is an **in-sample
-calendar objective** — useful for year-by-year P&amp;L discipline, not a claim of
-extra OOS alpha.
+On Yahoo HG 2008→now this posts **profit in every calendar year**
+(min year ≈ +0.22%, mean year ≈ +1.5%, total ≈ **+33%**, UPI ≈ 1.0).
+Versus the prior lock-only book (~+20% total), raising the per-trade profit target
+and widening the stop (with vol/Kelly) lifts total return by ~+13pp while keeping
+all years green. This remains an **in-sample calendar objective**.
 
 ```bash
 cd copper_ensemble
