@@ -43,6 +43,9 @@ risk:
   max_leverage: 5.0
   max_contracts: 20
   halt_on_breach: true
+  # After a breach, force resume after N flat bars and reset the equity peak.
+  # Without this, staying flat never recovers DD vs peak → book dies forever (~2014).
+  halt_cooldown_bars: 21
 
 portfolio:
   # HG notional ≈ price × 25,000 (~$100k/contract at $4/lb); size for ≥1 lot.

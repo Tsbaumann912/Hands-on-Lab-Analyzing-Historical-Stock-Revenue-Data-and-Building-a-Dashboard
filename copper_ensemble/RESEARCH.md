@@ -17,7 +17,8 @@ This package implements a CTA-style copper algorithm that is **not** part of Qua
 - Forecast diversification multiplier (FDM).
 - EWMA volatility targeting + fractional Kelly + hard contract/leverage caps.
 - Promotion: ablation, purged walk-forward, Deflated Sharpe.
-- Drawdown halt auto-resumes after recovery (so one early streak cannot zero an 18-year test).
+- Drawdown halt auto-resumes after recovery **or** a timed cooldown with peak reset
+  (flat equity never recovers vs peak — without cooldown the book died ~2014).
 
 ## Can walk-forward OOS Sharpe reach 1.5 on HG?
 

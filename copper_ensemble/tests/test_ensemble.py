@@ -173,6 +173,21 @@ def test_nested_optimize_synthetic_runs() -> None:
     assert np.isfinite(report.mean_oos_sharpe)
 
 
+def test_halt_cooldown_resumes() -> None:
+    from copper_ensemble.risk import RiskManager
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    rm = RiskManager(cfg)
+    peak = cfg.portfolio.initial_cash
+    # Breach 15% DD
+    rm.update_equity(peak * 0.80)
+    assert rm.halted
+    # Staying flat must still resume after cooldown bars
+    for _ in range(cfg.risk.halt_cooldown_bars):
+        rm.update_equity(peak * 0.80)
+    assert not rm.halted
+
+
 def test_candidate_selection_synthetic() -> None:
     from copper_ensemble.optimize import select_pre_specified_candidates
 

@@ -94,6 +94,7 @@ class RiskConfig:
     max_leverage: float
     max_contracts: int
     halt_on_breach: bool
+    halt_cooldown_bars: int = 21
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,7 @@ def clone_config(
         max_leverage=float(ro.get("max_leverage", r.max_leverage)),
         max_contracts=int(ro.get("max_contracts", r.max_contracts)),
         halt_on_breach=bool(ro.get("halt_on_breach", r.halt_on_breach)),
+        halt_cooldown_bars=int(ro.get("halt_cooldown_bars", r.halt_cooldown_bars)),
     )
     return Config(
         contract=cfg.contract,
@@ -268,6 +270,7 @@ def load_config(path: str | Path | None = None) -> Config:
             max_leverage=float(r["max_leverage"]),
             max_contracts=int(r["max_contracts"]),
             halt_on_breach=bool(r["halt_on_breach"]),
+            halt_cooldown_bars=int(r.get("halt_cooldown_bars", 21)),
         ),
         portfolio=PortfolioConfig(initial_cash=float(p["initial_cash"])),
         backtest=BacktestConfig(

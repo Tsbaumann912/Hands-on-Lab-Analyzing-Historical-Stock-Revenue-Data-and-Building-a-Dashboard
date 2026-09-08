@@ -25,6 +25,7 @@ class RiskManager:
         self._halt_reason: Optional[str] = None
         self._peak_equity: float = config.portfolio.initial_cash
         self._equity: float = config.portfolio.initial_cash
+        self._bars_since_halt: int = 0
 
     @property
     def halted(self) -> bool:
@@ -35,18 +36,29 @@ class RiskManager:
         self._peak_equity = max(self._peak_equity, self._equity)
         dd = 0.0 if self._peak_equity <= 0 else 1.0 - self._equity / self._peak_equity
         cap = self._cfg.risk.max_daily_drawdown_pct
+        cooldown = int(self._cfg.risk.halt_cooldown_bars)
+
+        if self._halted:
+            self._bars_since_halt += 1
+            # Resume when DD recovers, OR after a timed cooldown (flat books never
+            # recover vs peak, which previously killed multi-year backtests).
+            if dd <= 0.5 * cap or self._bars_since_halt >= max(cooldown, 1):
+                self._halted = False
+                self._halt_reason = None
+                self._bars_since_halt = 0
+                # Reset high-water mark so the breaker can re-arm cleanly.
+                self._peak_equity = self._equity
+            return
+
         if dd >= cap and self._cfg.risk.halt_on_breach:
             self._halted = True
             self._halt_reason = f"drawdown {dd:.2%} breached cap {cap:.2%}"
-        elif self._halted and dd <= 0.5 * cap:
-            # Auto-resume once drawdown recovers to half the breach threshold.
-            # Prevents a single early loss from permanently zeroing an 18-year backtest.
-            self._halted = False
-            self._halt_reason = None
+            self._bars_since_halt = 0
 
     def resume(self) -> None:
         self._halted = False
         self._halt_reason = None
+        self._bars_since_halt = 0
 
     def evaluate(self, signal: Signal, price: float) -> RiskDecision:
         reasons: List[str] = []
