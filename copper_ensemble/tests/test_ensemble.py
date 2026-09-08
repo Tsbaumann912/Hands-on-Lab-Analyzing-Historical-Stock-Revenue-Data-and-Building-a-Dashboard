@@ -132,6 +132,47 @@ def test_long_history_uses_eight_wfa_windows() -> None:
     assert len(report.walk_forward) >= 6  # should target 8; some may skip if short blocks
 
 
+def test_rebuild_weights_disables_fade() -> None:
+    from copper_ensemble.models import rebuild_weights
+
+    base = {"tsmom": 0.3, "carry": 0.25, "basis_mom": 0.2, "inventory": 0.15, "fade": 0.1}
+    w = rebuild_weights(base, tsmom_weight=0.6, enable_fade=False)
+    assert abs(sum(w.values()) - 1.0) < 1e-9
+    assert w["fade"] == 0.0
+    assert abs(w["tsmom"] - 0.6) < 1e-9
+
+
+def test_nested_optimize_synthetic_runs() -> None:
+    from copper_ensemble.optimize import nested_walk_forward_optimize
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(900, seed=11), "HG")
+    # Tiny search for CI speed
+    space = {
+        "n_trials_per_window": 4,
+        "n_windows": 3,
+        "in_sample_ratio": 0.70,
+        "purge_bars": 3,
+        "max_dd_soft_cap": 0.30,
+        "min_fills": 2,
+        "agreement_min": {"type": "float", "low": 0.15, "high": 0.35},
+        "buffer_forecast": {"type": "float", "low": 0.5, "high": 2.0},
+        "vol_target_annual": {"type": "float", "low": 0.10, "high": 0.16},
+        "kelly_fraction": {"type": "float", "low": 0.25, "high": 0.40},
+        "stop_atr_mult": {"type": "float", "low": 1.5, "high": 3.0},
+        "take_profit_atr_mult": {"type": "float", "low": 3.0, "high": 5.0},
+        "fdm_cap": {"type": "float", "low": 1.0, "high": 2.0},
+        "tsmom_weight": {"type": "float", "low": 0.45, "high": 0.70},
+        "enable_fade": {"type": "categorical", "choices": [True, False]},
+        "horizon_set": {"type": "categorical", "choices": [[21, 63, 252], [10, 21, 63]]},
+    }
+    report = nested_walk_forward_optimize(cfg, bars, space=space, seed=3)
+    assert len(report.windows) >= 2
+    assert report.robust_params
+    assert "agreement_min" in report.robust_params
+    assert np.isfinite(report.mean_oos_sharpe)
+
+
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     """Smoke: loader accepts start=; skip if network/Yahoo unavailable."""
     from copper_ensemble.data import load_yfinance_hg
