@@ -39,12 +39,25 @@ This package implements a CTA-style copper algorithm that is **not** part of Qua
 
 This project therefore treats `target_mean_oos_sharpe: 1.5` as an **aspirational gate that single-name HG is expected to fail**, and surfaces that failure explicitly in validation notes.
 
+## Robust optimisation (anti-overfit)
+
+Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
+
+1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS; pick the winner by mean OOS Sharpe. No continuous search → low multiple-testing risk.
+2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now this **did not beat** the untuned baseline on nested OOS, which is the expected outcome when the edge is weak.
+
+**Production choice (2008→now):** `C_no_fade_long_h` — fade sleeve off, TSMOM horizons `[63, 126, 252]`.
+Among the fixed menu this wins on both 6-window nested OOS (~+0.26 vs baseline ~+0.22) and
+8-window nested OOS (~−0.29 vs baseline ~−0.48) with lower turnover. Anchored 2019→now holdout
+remains weak (single-name limit). Free Optuna did **not** beat baseline on nested OOS.
+
 ## Run
 
 ```bash
 cd copper_ensemble
 pip install -e .
 pytest -q
+python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates
 python -m copper_ensemble.cli validate --start 2008-01-01
 python -m copper_ensemble.web
 ```

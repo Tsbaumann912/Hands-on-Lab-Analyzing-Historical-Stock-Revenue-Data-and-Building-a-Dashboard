@@ -173,6 +173,17 @@ def test_nested_optimize_synthetic_runs() -> None:
     assert np.isfinite(report.mean_oos_sharpe)
 
 
+def test_candidate_selection_synthetic() -> None:
+    from copper_ensemble.optimize import select_pre_specified_candidates
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(1200, seed=9), "HG")
+    winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3)
+    assert winner.name
+    assert len(ranked) == 6
+    assert np.isfinite(winner.mean_oos_sharpe)
+
+
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     """Smoke: loader accepts start=; skip if network/Yahoo unavailable."""
     from copper_ensemble.data import load_yfinance_hg

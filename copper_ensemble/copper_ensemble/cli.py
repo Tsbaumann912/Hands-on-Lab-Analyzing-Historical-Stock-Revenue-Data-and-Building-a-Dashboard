@@ -18,6 +18,7 @@ from copper_ensemble.optimize import (
     nested_walk_forward_optimize,
     params_to_config,
     robust_params_to_yaml_ensemble,
+    select_pre_specified_candidates,
 )
 from copper_ensemble.validation import validate_ensemble
 
@@ -126,8 +127,81 @@ def _report_to_dict(report: Any) -> Dict[str, Any]:
 
 
 def cmd_optimize(args: argparse.Namespace) -> int:
-    """Nested purged WFA Optuna — IS-only tuning, OOS evaluation, median robust params."""
+    """Nested purged WFA Optuna or discrete candidate selection (anti-overfit)."""
     cfg, bars = _load_bars(args)
+    mode = getattr(args, "mode", "candidates")
+
+    if mode == "candidates":
+        winner, ranked = select_pre_specified_candidates(
+            cfg,
+            bars,
+            n_windows=args.windows,
+        )
+        payload: Dict[str, Any] = {
+            "mode": "candidates",
+            "winner": winner.name,
+            "winner_mean_oos_sharpe": winner.mean_oos_sharpe,
+            "winner_median_oos_sharpe": winner.median_oos_sharpe,
+            "winner_full": winner.full,
+            "winner_holdout_sharpe": winner.holdout_sharpe,
+            "winner_ensemble": winner.ensemble,
+            "candidates": [
+                {
+                    "name": r.name,
+                    "mean_oos_sharpe": r.mean_oos_sharpe,
+                    "median_oos_sharpe": r.median_oos_sharpe,
+                    "mean_is_sharpe": r.mean_is_sharpe,
+                    "full_sharpe": r.full.get("sharpe"),
+                    "full_return": r.full.get("total_return"),
+                    "n_fills": r.full.get("n_fills"),
+                    "holdout_sharpe": r.holdout_sharpe,
+                    "oos_sharpes": r.oos_sharpes,
+                }
+                for r in ranked
+            ],
+            "notes": [
+                "Candidates are pre-specified economic variants (not free Optuna).",
+                "Winner maximises nested purged mean OOS Sharpe among the fixed menu.",
+                "Free Optuna on IS often fails to beat baseline on nested OOS for single-name HG.",
+            ],
+            "n_bars": len(bars),
+            "date_start": str(bars[0].timestamp) if bars else None,
+            "date_end": str(bars[-1].timestamp) if bars else None,
+        }
+        if args.apply:
+            from copper_ensemble.models import clone_config
+
+            config_path = Path(args.config)
+            with config_path.open() as fh:
+                raw = yaml.safe_load(fh) or {}
+            raw["ensemble"] = {**raw.get("ensemble", {}), **winner.ensemble}
+            with config_path.open("w") as fh:
+                yaml.safe_dump(raw, fh, sort_keys=False, default_flow_style=False)
+            logger.info("Applied winner %s to %s", winner.name, config_path)
+            payload["applied_config"] = str(config_path)
+            from copper_ensemble.validation import validate_ensemble as _val
+
+            v = _val(clone_config(cfg, ensemble_overrides=winner.ensemble), bars)
+            payload["post_apply_validation"] = {
+                "full": v.full,
+                "mean_oos_sharpe": v.mean_oos_sharpe,
+                "mean_is_sharpe": v.mean_is_sharpe,
+                "passed": v.passed,
+                "notes": v.notes[:6],
+                "walk_forward": [
+                    {
+                        "window": w.window,
+                        "is_sharpe": w.is_sharpe,
+                        "oos_sharpe": w.oos_sharpe,
+                        "oos_max_dd": w.oos_max_dd,
+                    }
+                    for w in v.walk_forward
+                ],
+            }
+        print(json.dumps(payload, indent=2, default=str))
+        return 0
+
+    # mode == optuna
     space_path = args.optuna_config
     report = nested_walk_forward_optimize(
         cfg,
@@ -138,6 +212,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         seed=args.seed,
     )
     payload = _report_to_dict(report)
+    payload["mode"] = "optuna"
     payload["n_bars"] = len(bars)
     payload["date_start"] = str(bars[0].timestamp) if bars else None
     payload["date_end"] = str(bars[-1].timestamp) if bars else None
@@ -147,15 +222,12 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         with config_path.open() as fh:
             raw = yaml.safe_load(fh) or {}
         ens = robust_params_to_yaml_ensemble(cfg, report.robust_params)
-        # Preserve comments-free merge for ensemble block
         raw["ensemble"] = {**raw.get("ensemble", {}), **ens}
-        # Keep explanatory keys
         raw["ensemble"]["weights"] = ens["weights"]
         with config_path.open("w") as fh:
             yaml.safe_dump(raw, fh, sort_keys=False, default_flow_style=False)
         logger.info("Applied robust ensemble params to %s", config_path)
         payload["applied_config"] = str(config_path)
-        # Quick post-apply validate metrics under new config
         new_cfg = params_to_config(cfg, report.robust_params)
         from copper_ensemble.validation import validate_ensemble as _val
 
@@ -178,7 +250,6 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         }
 
     print(json.dumps(payload, indent=2, default=str))
-    # Non-zero only if optimization produced no windows
     return 0 if report.windows else 1
 
 
@@ -218,20 +289,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     opt = sub.add_parser(
         "optimize",
-        help="Nested purged WFA Optuna (IS-only tune; OOS evaluate; no holdout peeking)",
+        help="Anti-overfit optimize: discrete candidates (default) or nested Optuna",
     )
     _add_data_args(opt)
     opt.add_argument(
+        "--mode",
+        choices=["candidates", "optuna"],
+        default="candidates",
+        help="candidates=fixed economic menu (recommended); optuna=IS-only nested WFA",
+    )
+    opt.add_argument(
         "--optuna-config",
         default=str(Path(__file__).resolve().parents[1] / "config" / "optuna.yaml"),
-        help="Search-space YAML (bounds only; never hardcode in code)",
+        help="Search-space YAML for --mode optuna",
     )
     opt.add_argument("--trials", type=int, default=None, help="Override trials per window")
     opt.add_argument("--windows", type=int, default=None, help="Override WFA window count")
     opt.add_argument(
         "--apply",
         action="store_true",
-        help="Write median IS-selected robust params into --config (not OOS-cherry-picked)",
+        help="Write selected ensemble into --config",
     )
     opt.set_defaults(func=cmd_optimize)
     return p

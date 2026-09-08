@@ -1,4 +1,6 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
+# Production ensemble selected by nested purged OOS among a tiny pre-specified
+# candidate set (see RESEARCH.md). Fade disabled; longer TSMOM horizons.
 contract:
   symbol: HG
   name: Copper
@@ -10,14 +12,14 @@ contract:
   slippage_ticks: 1
 
 ensemble:
-  horizons_days: [21, 63, 252]
-  # On Yahoo path, carry/inventory/PMI are proxies — overweight real price TSMOM.
+  # Longer horizons reduce short-noise; fade sleeve off (Yahoo PMI/USD are proxies).
+  horizons_days: [63, 126, 252]
   weights:
     tsmom: 0.55
-    carry: 0.15
-    basis_mom: 0.15
-    inventory: 0.10
-    fade: 0.05
+    carry: 0.16875
+    basis_mom: 0.16875
+    inventory: 0.1125
+    fade: 0.0
   forecast_cap: 20.0
   agreement_min: 0.20
   fdm_cap: 2.0

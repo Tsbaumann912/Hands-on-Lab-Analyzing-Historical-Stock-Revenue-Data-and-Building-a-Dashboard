@@ -406,3 +406,193 @@ def robust_params_to_yaml_ensemble(base: Config, params: Mapping[str, Any]) -> D
         "stop_atr_mult": round(e.stop_atr_mult, 4),
         "take_profit_atr_mult": round(e.take_profit_atr_mult, 4),
     }
+
+
+@dataclass
+class CandidateResult:
+    name: str
+    mean_oos_sharpe: float
+    median_oos_sharpe: float
+    mean_is_sharpe: float
+    full: Dict[str, float]
+    holdout_sharpe: float
+    holdout_return: float
+    oos_sharpes: List[float]
+    ensemble: Dict[str, Any]
+
+
+def _baseline_ensemble_dict(cfg: Config) -> Dict[str, Any]:
+    e = cfg.ensemble
+    return {
+        "horizons_days": list(e.horizons_days),
+        "weights": dict(e.weights),
+        "forecast_cap": e.forecast_cap,
+        "agreement_min": e.agreement_min,
+        "fdm_cap": e.fdm_cap,
+        "vol_target_annual": e.vol_target_annual,
+        "ewma_vol_com_days": e.ewma_vol_com_days,
+        "fade_z": e.fade_z,
+        "buffer_forecast": e.buffer_forecast,
+        "kelly_fraction": e.kelly_fraction,
+        "inventory_sma": e.inventory_sma,
+        "inventory_delta_days": e.inventory_delta_days,
+        "basis_mom_lookback": e.basis_mom_lookback,
+        "price_z_lookback": e.price_z_lookback,
+        "atr_period": e.atr_period,
+        "stop_atr_mult": e.stop_atr_mult,
+        "take_profit_atr_mult": e.take_profit_atr_mult,
+    }
+
+
+def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
+    """
+    Tiny pre-specified candidate set (economic priors only).
+
+    Selecting among ≤6 candidates via nested OOS is far safer than free Optuna
+    over a continuous space on a single futures market.
+    """
+    # Anchor to a known trading baseline (fade-on, 21/63/252) regardless of
+    # whatever is currently in default.yaml — keeps the menu fixed.
+    anchor = {
+        "horizons_days": [21, 63, 252],
+        "weights": {
+            "tsmom": 0.55,
+            "carry": 0.15,
+            "basis_mom": 0.15,
+            "inventory": 0.10,
+            "fade": 0.05,
+        },
+        "forecast_cap": 20.0,
+        "agreement_min": 0.20,
+        "fdm_cap": 2.0,
+        "vol_target_annual": 0.15,
+        "ewma_vol_com_days": 60,
+        "fade_z": 2.0,
+        "buffer_forecast": 1.0,
+        "kelly_fraction": 0.40,
+        "inventory_sma": 60,
+        "inventory_delta_days": 20,
+        "basis_mom_lookback": 63,
+        "price_z_lookback": 20,
+        "atr_period": 14,
+        "stop_atr_mult": 2.0,
+        "take_profit_atr_mult": 4.0,
+    }
+    root = clone_config(base, ensemble_overrides=anchor)
+    w_nf = rebuild_weights(anchor["weights"], 0.55, False)
+    w_heavy = rebuild_weights(anchor["weights"], 0.80, False)
+    return [
+        ("A_baseline", root),
+        (
+            "B_no_fade",
+            clone_config(root, ensemble_overrides={**anchor, "weights": w_nf}),
+        ),
+        (
+            "C_no_fade_long_h",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": w_nf,
+                    "horizons_days": [63, 126, 252],
+                },
+            ),
+        ),
+        (
+            "D_no_fade_strict",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": w_nf,
+                    "agreement_min": 0.30,
+                    "buffer_forecast": 2.0,
+                    "vol_target_annual": 0.12,
+                    "kelly_fraction": 0.35,
+                },
+            ),
+        ),
+        (
+            "E_tsmom_heavy",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": w_heavy,
+                    "horizons_days": [63, 126, 252],
+                    "agreement_min": 0.25,
+                    "buffer_forecast": 1.5,
+                    "vol_target_annual": 0.12,
+                },
+            ),
+        ),
+        (
+            "F_no_fade_med_h",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": w_nf,
+                    "horizons_days": [21, 63, 126],
+                },
+            ),
+        ),
+    ]
+
+
+def select_pre_specified_candidates(
+    base: Config,
+    bars: List[Bar],
+    *,
+    n_windows: Optional[int] = None,
+    is_ratio: float = 0.70,
+    purge: int = 5,
+) -> Tuple[CandidateResult, List[CandidateResult]]:
+    """
+    Score a fixed candidate menu on nested purged OOS; return winner + all rows.
+
+    Winner rule: max mean OOS Sharpe, then median OOS, then anchored holdout Sharpe.
+    Window count defaults to long-history setting (≥3000 bars → 8) to match validate.
+    """
+    if n_windows is None:
+        n_windows = (
+            base.backtest.walk_forward_windows_long
+            if len(bars) >= base.backtest.long_history_bars
+            else base.backtest.walk_forward_windows
+        )
+    slices = _window_slices(len(bars), int(n_windows), is_ratio, purge)
+    if not slices:
+        raise ValueError("series too short for candidate WFA")
+
+    split = int(len(bars) * 0.70)
+    hold_bars = bars[min(split + purge, len(bars) - 50) :]
+    results: List[CandidateResult] = []
+
+    for name, cfg in build_default_candidates(base):
+        oos: List[float] = []
+        is_s: List[float] = []
+        for is0, is1, oos0, oos1 in slices:
+            is_s.append(float(_run_sharpe(cfg, bars[is0:is1]).get("sharpe", 0.0)))
+            oos.append(float(_run_sharpe(cfg, bars[oos0:oos1]).get("sharpe", 0.0)))
+        full = _run_sharpe(cfg, bars)
+        hold = _run_sharpe(cfg, hold_bars)
+        results.append(
+            CandidateResult(
+                name=name,
+                mean_oos_sharpe=float(np.mean(oos)),
+                median_oos_sharpe=float(np.median(oos)),
+                mean_is_sharpe=float(np.mean(is_s)),
+                full=dict(full),
+                holdout_sharpe=float(hold.get("sharpe", 0.0)),
+                holdout_return=float(hold.get("total_return", 0.0)),
+                oos_sharpes=oos,
+                ensemble=_baseline_ensemble_dict(cfg),
+            )
+        )
+
+    ranked = sorted(
+        results,
+        key=lambda r: (r.mean_oos_sharpe, r.median_oos_sharpe, r.holdout_sharpe),
+        reverse=True,
+    )
+    return ranked[0], ranked
