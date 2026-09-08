@@ -113,6 +113,7 @@ class BacktestConfig:
 class ValidationConfig:
     dsr_pass_threshold: float
     oos_retention_min: float
+    target_mean_oos_sharpe: float = 1.5
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,7 @@ def load_config(path: str | Path | None = None) -> Config:
         validation=ValidationConfig(
             dsr_pass_threshold=float(v["dsr_pass_threshold"]),
             oos_retention_min=float(v["oos_retention_min"]),
+            target_mean_oos_sharpe=float(v.get("target_mean_oos_sharpe", 1.5)),
         ),
         raw=raw,
     )

@@ -190,12 +190,12 @@ DASHBOARD_HTML = """
     function renderMetrics(m, v) {
       const items = [
         ['Sharpe', fmt(m.sharpe, 3), m.sharpe >= 0 ? 'good' : 'bad'],
+        ['Mean OOS Sharpe', fmt(v.mean_oos_sharpe, 3), v.target_oos_met ? 'good' : 'bad'],
+        ['Target OOS 1.5', v.target_oos_met ? 'MET' : 'NOT MET', v.target_oos_met ? 'good' : 'bad'],
         ['Total return', pct(m.total_return), m.total_return >= 0 ? 'good' : 'bad'],
         ['Max DD', pct(m.max_drawdown), 'bad'],
         ['End equity', '$' + fmt(m.end_equity, 0), ''],
         ['Fills', fmt(m.n_fills, 0), ''],
-        ['DSR', fmt(v.deflated_sharpe, 3), v.deflated_sharpe >= 0.95 ? 'good' : ''],
-        ['OOS retention', pct(v.oos_retention), ''],
         ['Gates', v.passed ? 'PASSED' : 'FAILED', v.passed ? 'good' : 'bad'],
       ];
       document.getElementById('metrics').innerHTML = items.map(([k, val, cls]) =>
@@ -346,6 +346,9 @@ def api_run() -> Any:
             "passed": report.passed,
             "deflated_sharpe": report.deflated_sharpe,
             "oos_retention": report.oos_retention,
+            "mean_oos_sharpe": report.mean_oos_sharpe,
+            "mean_is_sharpe": report.mean_is_sharpe,
+            "target_oos_met": report.target_oos_met,
             "notes": report.notes,
             "ablations": report.ablations,
             "walk_forward": [

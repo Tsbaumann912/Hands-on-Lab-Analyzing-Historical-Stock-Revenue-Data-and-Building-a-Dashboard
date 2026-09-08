@@ -69,7 +69,8 @@ def test_disagreement_flattens() -> None:
         "fade": np.full(n, 10.0),
     }
     f_star, agreement, _, _ = blend_forecasts(forecasts, cfg.ensemble)
-    assert float(np.nanmean(agreement)) < cfg.ensemble.agreement_min + 0.05
+    # Alternating signs → agreement = 0.2; with agreement_min=0.20 must flatten
+    assert float(np.nanmean(agreement)) <= cfg.ensemble.agreement_min + 1e-9
     assert float(np.nanmean(np.abs(f_star))) < 1.0
 
 

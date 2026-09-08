@@ -28,7 +28,10 @@ class ValidationReport:
     walk_forward: List[WindowResult] = field(default_factory=list)
     deflated_sharpe: float = 0.0
     oos_retention: float = 0.0
+    mean_oos_sharpe: float = 0.0
+    mean_is_sharpe: float = 0.0
     passed: bool = False
+    target_oos_met: bool = False
     notes: List[str] = field(default_factory=list)
 
 
@@ -157,7 +160,12 @@ def validate_ensemble(config: Config, bars: List[Bar]) -> ValidationReport:
         else:
             retention = 0.0 if mean_oos <= 0 else 1.0
     else:
+        mean_is = 0.0
+        mean_oos = 0.0
         retention = 0.0
+
+    target = config.validation.target_mean_oos_sharpe
+    target_oos_met = bool(wf) and mean_oos >= target
 
     notes: List[str] = []
     passed = True
@@ -180,12 +188,27 @@ def validate_ensemble(config: Config, bars: List[Bar]) -> ValidationReport:
         notes.append("Walk-forward produced no windows (series too short?)")
         passed = False
 
+    # Explicit institutional bar: mean OOS Sharpe ≥ target (default 1.5)
+    notes.append(
+        f"Mean WFA OOS Sharpe = {mean_oos:.3f} "
+        f"(target {target:.1f}; {'MET' if target_oos_met else 'NOT MET'})."
+    )
+    if not target_oos_met:
+        passed = False
+        notes.append(
+            "Single-name HG cannot honestly clear ~1.5 mean OOS Sharpe: "
+            "AQR/Moskowitz TSMOM Sharpes ~1.5–1.8 require 50+ diversified futures, "
+            "not one copper contract. Yahoo curve/inventory/PMI are proxies. "
+            "Synthetic data can exceed 1.5 because the edge is planted — that is not "
+            "evidence for live copper trading."
+        )
+
     # Ensemble should not be worse than every single sleeve on Sharpe
     only_sharpes = [ablations[f"only_{s}"]["sharpe"] for s in SLEEVE_ORDER]
     if full.metrics["sharpe"] + 1e-9 < min(only_sharpes):
         notes.append("Warning: full blend Sharpe below every single-sleeve Sharpe")
 
-    if passed and not notes:
+    if passed and len(notes) <= 1:
         notes.append("All soft gates reviewed")
     elif passed:
         notes.append("Promotion gates passed with notes above")
@@ -196,6 +219,9 @@ def validate_ensemble(config: Config, bars: List[Bar]) -> ValidationReport:
         walk_forward=wf,
         deflated_sharpe=dsr,
         oos_retention=retention,
+        mean_oos_sharpe=mean_oos,
+        mean_is_sharpe=mean_is,
         passed=passed,
+        target_oos_met=target_oos_met,
         notes=notes,
     )
