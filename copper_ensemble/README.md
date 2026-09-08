@@ -26,6 +26,9 @@ pip install -r requirements.txt
 pytest -q
 python -m copper_ensemble.cli backtest --synthetic --plot-summary
 python -m copper_ensemble.cli validate --synthetic
+
+# Web dashboard (default http://127.0.0.1:8060)
+python -m copper_ensemble.web
 ```
 
 ## Layout
