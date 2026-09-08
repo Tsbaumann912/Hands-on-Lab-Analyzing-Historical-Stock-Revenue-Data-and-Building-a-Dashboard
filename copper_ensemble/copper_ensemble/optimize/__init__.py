@@ -462,6 +462,14 @@ def robust_params_to_yaml_ensemble(base: Config, params: Mapping[str, Any]) -> D
         "atr_period": e.atr_period,
         "stop_atr_mult": round(e.stop_atr_mult, 4),
         "take_profit_atr_mult": round(e.take_profit_atr_mult, 4),
+        "fast_ma_period": e.fast_ma_period,
+        "slow_ma_period": e.slow_ma_period,
+        "rsi_period": e.rsi_period,
+        "stoch_rsi_period": e.stoch_rsi_period,
+        "stoch_rsi_smooth_k": e.stoch_rsi_smooth_k,
+        "stoch_rsi_smooth_d": e.stoch_rsi_smooth_d,
+        "stoch_rsi_oversold": e.stoch_rsi_oversold,
+        "stoch_rsi_overbought": e.stoch_rsi_overbought,
     }
 
 
@@ -511,6 +519,14 @@ def _baseline_ensemble_dict(cfg: Config) -> Dict[str, Any]:
         "atr_period": e.atr_period,
         "stop_atr_mult": e.stop_atr_mult,
         "take_profit_atr_mult": e.take_profit_atr_mult,
+        "fast_ma_period": e.fast_ma_period,
+        "slow_ma_period": e.slow_ma_period,
+        "rsi_period": e.rsi_period,
+        "stoch_rsi_period": e.stoch_rsi_period,
+        "stoch_rsi_smooth_k": e.stoch_rsi_smooth_k,
+        "stoch_rsi_smooth_d": e.stoch_rsi_smooth_d,
+        "stoch_rsi_oversold": e.stoch_rsi_oversold,
+        "stoch_rsi_overbought": e.stoch_rsi_overbought,
     }
 
 
@@ -521,16 +537,19 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
     Selecting among ≤6 candidates via nested OOS is far safer than free Optuna
     over a continuous space on a single futures market.
     """
-    # Anchor to a known trading baseline (fade-on, 21/63/252) regardless of
-    # whatever is currently in default.yaml — keeps the menu fixed.
+    # Shared risk: user-requested max_position_size_pct = 5
+    risk_ovr = {"max_position_size_pct": 5.0}
+
     anchor = {
         "horizons_days": [21, 63, 252],
         "weights": {
-            "tsmom": 0.55,
-            "carry": 0.15,
-            "basis_mom": 0.15,
-            "inventory": 0.10,
+            "tsmom": 0.40,
+            "carry": 0.12,
+            "basis_mom": 0.12,
+            "inventory": 0.08,
             "fade": 0.05,
+            "ma_cross": 0.12,
+            "stoch_rsi": 0.11,
         },
         "forecast_cap": 20.0,
         "agreement_min": 0.20,
@@ -547,15 +566,32 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
         "atr_period": 14,
         "stop_atr_mult": 2.0,
         "take_profit_atr_mult": 4.0,
+        "fast_ma_period": 10,
+        "slow_ma_period": 50,
+        "rsi_period": 14,
+        "stoch_rsi_period": 14,
+        "stoch_rsi_smooth_k": 3,
+        "stoch_rsi_smooth_d": 3,
+        "stoch_rsi_oversold": 0.20,
+        "stoch_rsi_overbought": 0.80,
     }
-    root = clone_config(base, ensemble_overrides=anchor)
-    w_nf = rebuild_weights(anchor["weights"], 0.55, False)
-    w_heavy = rebuild_weights(anchor["weights"], 0.80, False)
+    root = clone_config(base, ensemble_overrides=anchor, risk_overrides=risk_ovr)
+    w_nf = rebuild_weights(anchor["weights"], 0.40, False)
+    w_heavy = rebuild_weights(anchor["weights"], 0.70, False)
+    w_ma = {
+        "tsmom": 0.30,
+        "carry": 0.08,
+        "basis_mom": 0.08,
+        "inventory": 0.06,
+        "fade": 0.0,
+        "ma_cross": 0.28,
+        "stoch_rsi": 0.20,
+    }
     return [
         ("A_baseline", root),
         (
             "B_no_fade",
-            clone_config(root, ensemble_overrides={**anchor, "weights": w_nf}),
+            clone_config(root, ensemble_overrides={**anchor, "weights": w_nf}, risk_overrides=risk_ovr),
         ),
         (
             "C_no_fade_long_h",
@@ -566,6 +602,7 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                     "weights": w_nf,
                     "horizons_days": [63, 126, 252],
                 },
+                risk_overrides=risk_ovr,
             ),
         ),
         (
@@ -580,6 +617,7 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                     "vol_target_annual": 0.12,
                     "kelly_fraction": 0.35,
                 },
+                risk_overrides=risk_ovr,
             ),
         ),
         (
@@ -594,17 +632,21 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                     "buffer_forecast": 1.5,
                     "vol_target_annual": 0.12,
                 },
+                risk_overrides=risk_ovr,
             ),
         ),
         (
-            "F_no_fade_med_h",
+            "G_ma_stoch_heavy",
             clone_config(
                 root,
                 ensemble_overrides={
                     **anchor,
-                    "weights": w_nf,
-                    "horizons_days": [21, 63, 126],
+                    "weights": w_ma,
+                    "horizons_days": [63, 126, 252],
+                    "fast_ma_period": 10,
+                    "slow_ma_period": 50,
                 },
+                risk_overrides=risk_ovr,
             ),
         ),
     ]

@@ -210,13 +210,23 @@ def cmd_optimize(args: argparse.Namespace) -> int:
             with config_path.open() as fh:
                 raw = yaml.safe_load(fh) or {}
             raw["ensemble"] = {**raw.get("ensemble", {}), **winner.ensemble}
+            # Keep risk sizing from the candidate evaluation protocol
+            raw.setdefault("risk", {})
+            raw["risk"]["max_position_size_pct"] = 5.0
             with config_path.open("w") as fh:
                 yaml.safe_dump(raw, fh, sort_keys=False, default_flow_style=False)
             logger.info("Applied winner %s to %s", winner.name, config_path)
             payload["applied_config"] = str(config_path)
             from copper_ensemble.validation import validate_ensemble as _val
 
-            v = _val(clone_config(cfg, ensemble_overrides=winner.ensemble), bars)
+            v = _val(
+                clone_config(
+                    cfg,
+                    ensemble_overrides=winner.ensemble,
+                    risk_overrides={"max_position_size_pct": 5.0},
+                ),
+                bars,
+            )
             payload["post_apply_validation"] = {
                 "full": v.full,
                 "mean_oos_sharpe": v.mean_oos_sharpe,

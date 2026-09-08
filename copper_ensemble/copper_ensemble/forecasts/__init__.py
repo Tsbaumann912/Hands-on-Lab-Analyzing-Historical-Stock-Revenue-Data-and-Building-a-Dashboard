@@ -113,6 +113,112 @@ def forecast_inventory_trend(
     return _clip(out, cfg.forecast_cap)
 
 
+def _rolling_minmax(x: np.ndarray, window: int, mode: str) -> np.ndarray:
+    """Rolling min or max via sliding windows (vectorised)."""
+    n = x.shape[0]
+    out = np.full(n, np.nan, dtype=np.float64)
+    if window <= 0 or n < window:
+        return out
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    view = sliding_window_view(np.nan_to_num(x, nan=np.nan), window)
+    if mode == "min":
+        vals = np.nanmin(view, axis=1)
+    else:
+        vals = np.nanmax(view, axis=1)
+    out[window - 1 :] = vals
+    return out
+
+
+def sma(close: np.ndarray, period: int) -> np.ndarray:
+    """Simple moving average."""
+    return _rolling_mean(close, period)
+
+
+def rsi(close: np.ndarray, period: int) -> np.ndarray:
+    """SMA-based RSI in [0, 100]; NaN until warm-up."""
+    n = close.shape[0]
+    out = np.full(n, np.nan, dtype=np.float64)
+    if n < 2 or period <= 0:
+        return out
+    delta = np.empty(n, dtype=np.float64)
+    delta[0] = np.nan
+    delta[1:] = close[1:] - close[:-1]
+    gain = np.where(delta > 0.0, delta, 0.0)
+    loss = np.where(delta < 0.0, -delta, 0.0)
+    gain[0] = np.nan
+    loss[0] = np.nan
+    avg_gain = _rolling_mean(gain, period)
+    avg_loss = _rolling_mean(loss, period)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rs = avg_gain / avg_loss
+        rsi_v = 100.0 - (100.0 / (1.0 + rs))
+    rsi_v = np.where(avg_loss < 1e-12, 100.0, rsi_v)
+    rsi_v = np.where(np.isnan(avg_gain) | np.isnan(avg_loss), np.nan, rsi_v)
+    return rsi_v
+
+
+def stochastic_rsi(
+    close: np.ndarray,
+    rsi_period: int,
+    stoch_period: int,
+    smooth_k: int,
+    smooth_d: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Stochastic RSI in [0, 1].
+
+    Returns ``(stoch_rsi_raw, stoch_k, stoch_d)``.
+    """
+    r = rsi(close, rsi_period)
+    rmin = _rolling_minmax(r, stoch_period, "min")
+    rmax = _rolling_minmax(r, stoch_period, "max")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        raw = (r - rmin) / (rmax - rmin)
+    raw = np.where((rmax - rmin) < 1e-12, 0.5, raw)
+    raw = np.clip(raw, 0.0, 1.0)
+    k = _rolling_mean(raw, max(int(smooth_k), 1))
+    d = _rolling_mean(k, max(int(smooth_d), 1))
+    return raw, k, d
+
+
+def forecast_ma_cross(close: np.ndarray, cfg: EnsembleConfig) -> np.ndarray:
+    """Fast vs Slow SMA trend sleeve → forecast in [-20, 20]."""
+    fast = sma(close, cfg.fast_ma_period)
+    slow = sma(close, cfg.slow_ma_period)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sep = (fast - slow) / slow
+    # Map separation into forecast; ~1% gap → full strength
+    strength = np.clip(sep / 0.01, -1.0, 1.0)
+    out = 10.0 * strength
+    out = np.where(np.isnan(fast) | np.isnan(slow), np.nan, out)
+    return _clip(out, cfg.forecast_cap)
+
+
+def forecast_stoch_rsi(close: np.ndarray, cfg: EnsembleConfig) -> np.ndarray:
+    """
+    Stochastic RSI mean-reversion sleeve.
+
+    Oversold (%K < oversold) → long; overbought → short; else soft continuous.
+    """
+    _raw, k, _d = stochastic_rsi(
+        close,
+        cfg.rsi_period,
+        cfg.stoch_rsi_period,
+        cfg.stoch_rsi_smooth_k,
+        cfg.stoch_rsi_smooth_d,
+    )
+    # Continuous map: 0 → +10, 1 → -10 (fade extremes)
+    continuous = 10.0 * (0.5 - k) / 0.5
+    lo = cfg.stoch_rsi_oversold
+    hi = cfg.stoch_rsi_overbought
+    out = continuous.copy()
+    out = np.where(k <= lo, 10.0, out)
+    out = np.where(k >= hi, -10.0, out)
+    out = np.where(np.isnan(k), np.nan, out)
+    return _clip(out, cfg.forecast_cap)
+
+
 def forecast_macro_fade(
     close: np.ndarray,
     returns: np.ndarray,
@@ -180,4 +286,6 @@ def compute_all_forecasts(features: Dict[str, np.ndarray], cfg: EnsembleConfig) 
         "basis_mom": forecast_basis_momentum(features["basis"], cfg),
         "inventory": inventory,
         "fade": fade,
+        "ma_cross": forecast_ma_cross(features["close"], cfg),
+        "stoch_rsi": forecast_stoch_rsi(features["close"], cfg),
     }

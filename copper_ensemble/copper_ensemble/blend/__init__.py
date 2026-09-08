@@ -8,11 +8,19 @@ import numpy as np
 
 from copper_ensemble.models import EnsembleConfig
 
-SLEEVE_ORDER = ("tsmom", "carry", "basis_mom", "inventory", "fade")
+SLEEVE_ORDER = (
+    "tsmom",
+    "carry",
+    "basis_mom",
+    "inventory",
+    "fade",
+    "ma_cross",
+    "stoch_rsi",
+)
 
 
 def _weight_vector(weights: Mapping[str, float]) -> np.ndarray:
-    w = np.array([float(weights[k]) for k in SLEEVE_ORDER], dtype=np.float64)
+    w = np.array([float(weights.get(k, 0.0)) for k in SLEEVE_ORDER], dtype=np.float64)
     s = float(np.sum(w))
     if s <= 0:
         raise ValueError("ensemble weights must sum to a positive number")

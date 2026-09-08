@@ -67,11 +67,28 @@ def test_disagreement_flattens() -> None:
         "basis_mom": np.full(n, 10.0),
         "inventory": np.full(n, -10.0),
         "fade": np.full(n, 10.0),
+        "ma_cross": np.full(n, -10.0),
+        "stoch_rsi": np.full(n, 10.0),
     }
     f_star, agreement, _, _ = blend_forecasts(forecasts, cfg.ensemble)
-    # Alternating signs → agreement = 0.2; with agreement_min=0.20 must flatten
+    # Alternating signs → low agreement; must flatten
     assert float(np.nanmean(agreement)) <= cfg.ensemble.agreement_min + 1e-9
     assert float(np.nanmean(np.abs(f_star))) < 1.0
+
+
+def test_new_indicators_present() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    assert cfg.risk.max_position_size_pct == 5.0
+    assert "ma_cross" in cfg.ensemble.weights
+    assert "stoch_rsi" in cfg.ensemble.weights
+    bars = dataframe_to_bars(make_synthetic_hg(400, seed=4), "HG")
+    strat = CopperEnsembleStrategy(cfg)
+    strat.prepare(bars)
+    assert "ma_cross" in strat._forecasts
+    assert "stoch_rsi" in strat._forecasts
+    assert "ma_fast" in strat._features
+    assert np.isfinite(np.nanmean(strat._features["ma_fast"][100:]))
+    assert np.isfinite(np.nanmean(strat._forecasts["stoch_rsi"][80:]))
 
 
 def test_agreement_perfect() -> None:
@@ -135,7 +152,15 @@ def test_long_history_uses_eight_wfa_windows() -> None:
 def test_rebuild_weights_disables_fade() -> None:
     from copper_ensemble.models import rebuild_weights
 
-    base = {"tsmom": 0.3, "carry": 0.25, "basis_mom": 0.2, "inventory": 0.15, "fade": 0.1}
+    base = {
+        "tsmom": 0.3,
+        "carry": 0.2,
+        "basis_mom": 0.15,
+        "inventory": 0.1,
+        "fade": 0.1,
+        "ma_cross": 0.1,
+        "stoch_rsi": 0.05,
+    }
     w = rebuild_weights(base, tsmom_weight=0.6, enable_fade=False)
     assert abs(sum(w.values()) - 1.0) < 1e-9
     assert w["fade"] == 0.0

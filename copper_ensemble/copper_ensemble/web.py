@@ -142,7 +142,7 @@ DASHBOARD_HTML = """
 <body>
   <header>
     <h1 class="brand">Copper Ensemble</h1>
-    <p class="tag">Standalone COMEX HG CTA — TSMOM, carry, basis-momentum, inventory-trend, and macro-fade in one vol-targeted book. Independent of QuantTerminal.</p>
+    <p class="tag">Standalone COMEX HG CTA — TSMOM, carry, basis-momentum, inventory, fade, Fast/Slow MA cross, and Stochastic RSI in one vol-targeted book.</p>
   </header>
   <main>
     <section class="panel">

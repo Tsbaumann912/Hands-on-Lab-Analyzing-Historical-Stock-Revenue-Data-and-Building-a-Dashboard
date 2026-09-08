@@ -85,6 +85,14 @@ class EnsembleConfig:
     atr_period: int
     stop_atr_mult: float
     take_profit_atr_mult: float
+    fast_ma_period: int = 10
+    slow_ma_period: int = 50
+    rsi_period: int = 14
+    stoch_rsi_period: int = 14
+    stoch_rsi_smooth_k: int = 3
+    stoch_rsi_smooth_d: int = 3
+    stoch_rsi_oversold: float = 0.20
+    stoch_rsi_overbought: float = 0.80
 
 
 @dataclass(frozen=True)
@@ -197,6 +205,14 @@ def clone_config(
         atr_period=int(eo.get("atr_period", e.atr_period)),
         stop_atr_mult=float(eo.get("stop_atr_mult", e.stop_atr_mult)),
         take_profit_atr_mult=float(eo.get("take_profit_atr_mult", e.take_profit_atr_mult)),
+        fast_ma_period=int(eo.get("fast_ma_period", e.fast_ma_period)),
+        slow_ma_period=int(eo.get("slow_ma_period", e.slow_ma_period)),
+        rsi_period=int(eo.get("rsi_period", e.rsi_period)),
+        stoch_rsi_period=int(eo.get("stoch_rsi_period", e.stoch_rsi_period)),
+        stoch_rsi_smooth_k=int(eo.get("stoch_rsi_smooth_k", e.stoch_rsi_smooth_k)),
+        stoch_rsi_smooth_d=int(eo.get("stoch_rsi_smooth_d", e.stoch_rsi_smooth_d)),
+        stoch_rsi_oversold=float(eo.get("stoch_rsi_oversold", e.stoch_rsi_oversold)),
+        stoch_rsi_overbought=float(eo.get("stoch_rsi_overbought", e.stoch_rsi_overbought)),
     )
     r = cfg.risk
     ro = dict(risk_overrides or {})
@@ -263,6 +279,14 @@ def load_config(path: str | Path | None = None) -> Config:
             atr_period=int(e["atr_period"]),
             stop_atr_mult=float(e["stop_atr_mult"]),
             take_profit_atr_mult=float(e["take_profit_atr_mult"]),
+            fast_ma_period=int(e.get("fast_ma_period", 10)),
+            slow_ma_period=int(e.get("slow_ma_period", 50)),
+            rsi_period=int(e.get("rsi_period", 14)),
+            stoch_rsi_period=int(e.get("stoch_rsi_period", 14)),
+            stoch_rsi_smooth_k=int(e.get("stoch_rsi_smooth_k", 3)),
+            stoch_rsi_smooth_d=int(e.get("stoch_rsi_smooth_d", 3)),
+            stoch_rsi_oversold=float(e.get("stoch_rsi_oversold", 0.20)),
+            stoch_rsi_overbought=float(e.get("stoch_rsi_overbought", 0.80)),
         ),
         risk=RiskConfig(
             max_daily_drawdown_pct=float(r["max_daily_drawdown_pct"]),

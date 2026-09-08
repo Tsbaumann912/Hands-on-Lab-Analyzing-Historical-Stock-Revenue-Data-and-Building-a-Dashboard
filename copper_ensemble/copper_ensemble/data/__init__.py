@@ -248,6 +248,18 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
     with np.errstate(divide="ignore", invalid="ignore"):
         basis = np.log(np.clip(near, 1e-12, None)) - np.log(np.clip(nxt, 1e-12, None))
 
+    from copper_ensemble.forecasts import sma, stochastic_rsi
+
+    ma_fast = sma(close, config.ensemble.fast_ma_period)
+    ma_slow = sma(close, config.ensemble.slow_ma_period)
+    _stoch_raw, stoch_k, stoch_d = stochastic_rsi(
+        close,
+        config.ensemble.rsi_period,
+        config.ensemble.stoch_rsi_period,
+        config.ensemble.stoch_rsi_smooth_k,
+        config.ensemble.stoch_rsi_smooth_d,
+    )
+
     return {
         "close": close,
         "high": high,
@@ -262,4 +274,8 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
         "atr": atr_vals,
         "carry": carry,
         "basis": basis,
+        "ma_fast": ma_fast,
+        "ma_slow": ma_slow,
+        "stoch_rsi_k": stoch_k,
+        "stoch_rsi_d": stoch_d,
     }
