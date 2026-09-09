@@ -78,15 +78,27 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 
 1. Shorter horizons `[21, 63]`, high agreement (0.50), TSMOM + MA + StochRSI blend.
 2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.2%) after
-   `yearly_profit_lock_min_days`, flatten for the rest of the year.
+   `yearly_profit_lock_min_days`, flatten for the rest of the year (Nov protect on).
 3. **Enforced ATR stop / take-profit** in the backtest engine (`stop_atr_mult=4`,
-   `take_profit_atr_mult=10`) plus system drawdown halt (`max_daily_drawdown_pct=0.15`).
+   `take_profit_atr_mult=25`) plus system drawdown halt (`max_daily_drawdown_pct=0.15`).
+
+### Can mean calendar-year return reach 30%?
+
+**No — not on single-name COMEX HG under this methodology.**
+
+| Constraint | Result |
+|---|---|
+| Target | arithmetic mean calendar-year return ≥ **30%** |
+| Same methodology | all years green + ATR TP/stop + DD halt + yearly lock + `max_position_size_pct=5` / 20 contracts |
+| HG buy&hold 2008→now | mean yearly ≈ **10%**, **7** losing years |
+| Aggressive leverage search (vol ≤ 2, pos ≤ 50×, lock ≥ 30%) | **0** all-green configs; high means come with ruin years |
+| Best all-green ceiling found | mean yearly ≈ **3.0%**, total ≈ **+74%**, min year ≈ **+0.28%** |
+
+Pushing for 30% mean yearly requires leverage that breaks the all-green constraint (and often the account). The production file is set to the **best all-green mean-yearly** config found with the same knobs (TP/stop/DD/lock/vol/Kelly), not the unmet 30% target.
 
 On Yahoo HG 2008→now this posts **profit in every calendar year**
-(min year ≈ +0.22%, mean year ≈ +1.5%, total ≈ **+33%**, UPI ≈ 1.0).
-Versus the prior lock-only book (~+20% total), raising the per-trade profit target
-and widening the stop (with vol/Kelly) lifts total return by ~+13pp while keeping
-all years green. This remains an **in-sample calendar objective**.
+(min year ≈ +0.28%, mean year ≈ **+3.0%**, total ≈ **+74%**).
+This remains an **in-sample calendar objective**.
 
 ```bash
 cd copper_ensemble

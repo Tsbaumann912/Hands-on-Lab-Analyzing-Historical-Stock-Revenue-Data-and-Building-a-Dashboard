@@ -1,7 +1,7 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
-# Yearly-profit optimized (2008→now): every calendar year posts a profit.
-# Retuned max system DD + per-trade TP/stop for higher annual/total return
-# while keeping the calendar-year profit lock.
+# Same methodology: ATR TP/stop + system DD halt + calendar-year profit lock.
+# Re-optimized to maximize mean calendar-year return while keeping EVERY year green.
+# Honest ceiling on this book ≈ 3% mean yearly (NOT 30%) — see RESEARCH.md.
 contract:
   symbol: HG
   name: Copper
@@ -25,19 +25,19 @@ ensemble:
   forecast_cap: 20.0
   agreement_min: 0.50
   fdm_cap: 2.0
-  vol_target_annual: 0.20
+  vol_target_annual: 0.30
   ewma_vol_com_days: 60
   fade_z: 2.0
-  buffer_forecast: 3.0
-  kelly_fraction: 0.50
+  buffer_forecast: 2.5
+  kelly_fraction: 0.75
   inventory_sma: 60
   inventory_delta_days: 20
   basis_mom_lookback: 63
   price_z_lookback: 20
   atr_period: 14
-  # Wider stop + higher take-profit (ATR multiples) — enforced in the engine
+  # Higher take-profit, stop kept at 4 ATR — enforced in the engine
   stop_atr_mult: 4.0
-  take_profit_atr_mult: 10.0
+  take_profit_atr_mult: 25.0
   # Fast / Slow SMA
   fast_ma_period: 8
   slow_ma_period: 34
@@ -50,7 +50,7 @@ ensemble:
   stoch_rsi_overbought: 0.80
 
 risk:
-  # System drawdown halt (binds near ~15% on this book)
+  # System drawdown halt
   max_daily_drawdown_pct: 0.15
   max_position_size_pct: 5.0
   max_leverage: 5.0
@@ -59,8 +59,8 @@ risk:
   halt_cooldown_bars: 21
   yearly_profit_lock_enabled: true
   yearly_profit_lock_pct: 0.002
-  yearly_profit_lock_min_days: 1
-  yearly_nov_protect: false
+  yearly_profit_lock_min_days: 2
+  yearly_nov_protect: true
 
 portfolio:
   initial_cash: 500000.0
