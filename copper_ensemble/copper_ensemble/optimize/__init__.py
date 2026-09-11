@@ -692,6 +692,43 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                 },
             ),
         ),
+        (
+            "I_mean15_annual",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": {
+                        "tsmom": 0.70,
+                        "carry": 0.0,
+                        "basis_mom": 0.0,
+                        "inventory": 0.0,
+                        "fade": 0.0,
+                        "ma_cross": 0.20,
+                        "stoch_rsi": 0.10,
+                    },
+                    "horizons_days": [21, 63],
+                    "agreement_min": 0.50,
+                    "buffer_forecast": 2.0,
+                    "kelly_fraction": 1.0,
+                    "vol_target_annual": 0.80,
+                    "fast_ma_period": 8,
+                    "slow_ma_period": 34,
+                    "stop_atr_mult": 6.0,
+                    "take_profit_atr_mult": 20.0,
+                },
+                risk_overrides={
+                    "max_position_size_pct": 20.0,
+                    "max_leverage": 20.0,
+                    "max_contracts": 100,
+                    "max_daily_drawdown_pct": 0.45,
+                    "yearly_profit_lock_enabled": False,
+                    "yearly_profit_lock_pct": 0.20,
+                    "yearly_profit_lock_min_days": 1,
+                    "yearly_nov_protect": False,
+                },
+            ),
+        ),
     ]
 
 

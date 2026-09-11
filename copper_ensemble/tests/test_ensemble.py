@@ -78,7 +78,7 @@ def test_disagreement_flattens() -> None:
 
 def test_new_indicators_present() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
-    assert cfg.risk.max_position_size_pct == 5.0
+    assert cfg.risk.max_position_size_pct == 20.0
     assert "ma_cross" in cfg.ensemble.weights
     assert "stoch_rsi" in cfg.ensemble.weights
     bars = dataframe_to_bars(make_synthetic_hg(400, seed=4), "HG")
@@ -241,12 +241,13 @@ def test_halt_cooldown_resumes() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
     rm = RiskManager(cfg)
     peak = cfg.portfolio.initial_cash
-    # Breach 15% DD
-    rm.update_equity(peak * 0.80)
+    # Breach beyond configured max_daily_drawdown_pct (production is 45%)
+    breach_equity = peak * (1.0 - cfg.risk.max_daily_drawdown_pct - 0.05)
+    rm.update_equity(breach_equity)
     assert rm.halted
     # Staying flat must still resume after cooldown bars
     for _ in range(cfg.risk.halt_cooldown_bars):
-        rm.update_equity(peak * 0.80)
+        rm.update_equity(breach_equity)
     assert not rm.halted
 
 
@@ -261,13 +262,15 @@ def test_candidate_selection_synthetic() -> None:
     assert np.isfinite(winner.mean_oos_sharpe)
 
 
-def test_yearly_profit_lock_all_green_on_config() -> None:
-    """Production yearly-profit config should post profit every calendar year on HG 2008→now."""
+def test_mean_calendar_year_return_ge_15_on_config() -> None:
+    """Production config targets mean calendar-year return ≥ 15% on HG 2008→now."""
     from copper_ensemble.data import load_yfinance_hg
     from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 
     cfg = load_config(ROOT / "config" / "default.yaml")
-    assert cfg.risk.yearly_profit_lock_enabled is True
+    assert cfg.risk.yearly_profit_lock_enabled is False
+    assert cfg.ensemble.vol_target_annual >= 0.70
+    assert cfg.risk.max_position_size_pct >= 15.0
     try:
         bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
     except Exception as exc:  # noqa: BLE001
@@ -277,15 +280,11 @@ def test_yearly_profit_lock_all_green_on_config() -> None:
     result = BacktestEngine(cfg).run(bars)
     yearly = calendar_year_returns(result.equity_curve, [b.timestamp for b in bars])
     assert yearly, "expected calendar years"
-    losing = [y for y, r in yearly.items() if r < 0]
-    assert not losing, f"losing years: {losing}"
-    assert float(result.metrics.get("n_losing_years", 1)) == 0.0
-    assert float(result.metrics.get("min_year_return", -1)) > 0.0
-    # Best all-green mean-yearly book (~3% mean, ~74% total); 30% mean is not achievable.
-    assert float(result.metrics.get("total_return", 0.0)) >= 0.50
-    assert cfg.ensemble.take_profit_atr_mult >= 20.0
-    assert cfg.ensemble.stop_atr_mult >= 3.0
-    assert cfg.ensemble.vol_target_annual >= 0.25
+    mean_yr = float(np.mean(list(yearly.values())))
+    assert mean_yr >= 0.15, f"mean calendar-year return {mean_yr:.4f} < 0.15"
+    assert float(result.metrics.get("total_return", -1.0)) > 0.0
+    assert cfg.ensemble.take_profit_atr_mult >= 15.0
+    assert cfg.ensemble.stop_atr_mult >= 4.0
 
 
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
