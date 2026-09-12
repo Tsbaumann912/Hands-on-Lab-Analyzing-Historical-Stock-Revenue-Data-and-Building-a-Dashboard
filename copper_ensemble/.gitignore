@@ -5,6 +5,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+# Keep releases/*.zip tracked so the downloadable package ships with the repo
+!releases/
+!releases/*.zip
+!releases/*.sha256
 .venv/
 venv/
 *.log

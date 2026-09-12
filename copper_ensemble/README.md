@@ -4,6 +4,22 @@ Standalone systematic trading research and backtest project for **COMEX Copper (
 
 This package is **not** part of QuantTerminal. It has zero imports from QuantTerminal and can be copied or published as its own repository.
 
+## Download
+
+Pre-built release zip (production book: all calendar years green, max DD ≤ 30%):
+
+- [`releases/copper-ensemble-allgreen-dd30-v0.2.0.zip`](releases/copper-ensemble-allgreen-dd30-v0.2.0.zip)
+- Install guide: [`DOWNLOAD.md`](DOWNLOAD.md)
+
+```bash
+unzip copper-ensemble-allgreen-dd30-v0.2.0.zip
+cd copper-ensemble-allgreen-dd30-v0.2.0
+pip install -r requirements.txt && pip install -e .
+python -m copper_ensemble.cli backtest --synthetic
+```
+
+Rebuild the zip anytime with `bash scripts/build_release.sh`.
+
 ## What it does
 
 Combines five economically motivated forecast sleeves into one vol-targeted ensemble:
@@ -26,7 +42,21 @@ pip install -r requirements.txt
 pytest -q
 python -m copper_ensemble.cli backtest --synthetic --plot-summary
 python -m copper_ensemble.cli validate --synthetic
+python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates
 ```
+
+## Market walk-forward (2008 → now)
+
+```bash
+# Yahoo HG=F from 2008-01-01 through today (curve/inventory/PMI are proxies)
+python -m copper_ensemble.cli validate --start 2008-01-01
+python -m copper_ensemble.cli backtest --start 2008-01-01 --plot-summary
+# Anti-overfit config selection among a fixed economic menu:
+python -m copper_ensemble.cli optimize --start 2008-01-01 --mode candidates
+```
+
+In the web UI choose **Yahoo HG 2008→now** and click **Run backtest + validate**.
+Long histories (≥3000 bars) use 8 walk-forward windows automatically.
 
 ## Layout
 
