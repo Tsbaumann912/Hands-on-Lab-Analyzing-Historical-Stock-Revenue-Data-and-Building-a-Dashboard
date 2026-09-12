@@ -74,40 +74,37 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
 2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
-**Production choice (2008→now):** `J_mean20_annual` — targets **arithmetic mean calendar-year return ≥ 20%** via:
+**Production choice (2008→now):** `K_allgreen_dd30` — **every calendar year profitable** and **max drawdown ≤ 30%**, maximizing mean yearly / total return under those caps via:
 
-1. Horizons `[21, 63]`, agreement 0.50, blend `tsmom=0.60` / `ma_cross=0.25` / `stoch_rsi=0.15`.
-2. **Yearly profit lock OFF** (same methodology as the ≥15% book; tight lock caps mean yearly near ~3%).
-3. Risk budget: `vol_target_annual=0.85`, `max_position_size_pct=15`, `max_contracts=75`,
-   `max_daily_drawdown_pct=0.50`, ATR stop 4 / TP 20, Kelly 1.0.
+1. Horizons `[21, 63]`, agreement 0.50, blend `tsmom=0.55` / `ma_cross=0.25` / `stoch_rsi=0.20`.
+2. **Yearly profit lock ON** at 0.1% after 2 sessions (+ Nov protect) — required for all-green years.
+3. Risk budget: `vol_target_annual=0.32`, `max_position_size_pct=7`, `max_contracts=28`,
+   `max_daily_drawdown_pct=0.25`, ATR stop 4 / TP 25, Kelly 1.0, buffer 2.5.
 
-### Can mean calendar-year return reach 20%?
-
-**Yes — under the same ATR/DD/ensemble methodology with the yearly lock disabled.**
+### All-green years + max DD ≤ 30% (current production)
 
 | Constraint | Result |
 |---|---|
-| Target | arithmetic mean calendar-year return ≥ **20%** |
-| Production (`J_mean20_annual`) | mean yearly ≈ **+23.3%**, total ≈ **+303%**, CAGR ≈ **+7.8%**, **10** losing years, max DD ≈ **76%** |
-| Prior ≥15% book (`I_mean15_annual`) | mean yearly ≈ **+21.4%**, total ≈ **+169%**, CAGR ≈ **+5.5%**, max DD ≈ **85%** |
-| Prior all-green + 0.2% lock | mean yearly ≈ **+3.0%**, total ≈ **+74%**, **0** losing years |
+| Target | all calendar years > 0 **and** max DD ≤ **30%**, max mean/total |
+| Production (`K_allgreen_dd30`) | mean yearly ≈ **+3.70%**, total ≈ **+97.6%**, CAGR ≈ **+3.72%**, **0** losing years, max DD ≈ **29.4%** |
+| Prior all-green (`H_yearly_profit`) | mean yearly ≈ **+3.0%**, total ≈ **+74%**, max DD ≈ **26.5%** |
+| Unlocked ≥20% book (`J_mean20_annual`) | mean yearly ≈ **+23.3%**, total ≈ **+303%**, **10** red years, max DD ≈ **76%** |
+| Unlocked ≥15% book (`I_mean15_annual`) | mean yearly ≈ **+21.4%**, total ≈ **+169%**, max DD ≈ **85%** |
 | HG buy&hold 2008→now | mean yearly ≈ **10%**, **7** losing years |
-| Mean ≥ 30% + all-green | **Not found** — see below |
 
-**Honest tradeoff:** arithmetic mean of calendar years can sit well above CAGR when a few huge up-years dominate (e.g. 2008/2020). Path drawdowns remain severe (~76% max DD). This is an **in-sample calendar objective**, not a claim of smooth 20% compounded.
+**Honest ceiling:** under all-green + DD ≤ 30% on single-name HG, mean yearly stays ~**3–4%**. Higher arithmetic means (≥15%/≥20%) require unlocking the yearly lock and accepting red years plus much deeper drawdowns.
 
-### Can mean calendar-year return reach 30% with all years green?
+### Can mean calendar-year return reach 20% or 30% with all years green?
 
-**No — not on single-name COMEX HG under this methodology.**
+**No — not on single-name COMEX HG under this methodology with DD ≤ 30%.**
 
 | Constraint | Result |
 |---|---|
-| Target | arithmetic mean calendar-year return ≥ **30%** |
-| Same methodology | all years green + ATR TP/stop + DD halt + yearly lock + `max_position_size_pct=5` / 20 contracts |
-| Aggressive leverage search (vol ≤ 2, pos ≤ 50×, lock ≥ 30%) | **0** all-green configs; high means come with ruin years |
-| Best all-green ceiling found | mean yearly ≈ **3.0%**, total ≈ **+74%**, min year ≈ **+0.28%** |
+| Mean ≥ 20% + all-green + DD ≤ 30% | **Not found** |
+| Mean ≥ 30% + all-green | **Not found** — high means come with ruin years |
+| Best all-green + DD ≤ 30% found | mean yearly ≈ **+3.70%**, total ≈ **+97.6%**, min year ≈ **+0.04%**, max DD ≈ **29.4%** |
 
-Legacy candidates `H_yearly_profit` (all-green) and `I_mean15_annual` remain in the menu for comparison.
+Legacy candidates `H_yearly_profit`, `I_mean15_annual`, and `J_mean20_annual` remain in the menu for comparison.
 
 ```bash
 cd copper_ensemble

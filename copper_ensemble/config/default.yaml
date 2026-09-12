@@ -1,8 +1,8 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
-# Same methodology: ATR TP/stop + system DD halt (+ optional calendar-year lock).
-# Re-optimized for mean calendar-year return ≥ 20% on Yahoo HG 2008→now.
-# Same methodology (ATR TP/stop + DD halt; yearly lock OFF). Some red years and deep DD.
-# Arithmetic mean yearly ≠ CAGR — see RESEARCH.md.
+# Same methodology: ATR TP/stop + system DD halt + calendar-year profit lock.
+# Re-optimized for all calendar years profitable AND max drawdown ≤ 30% on
+# Yahoo HG 2008→now, maximizing mean yearly / total return under those caps.
+# Arithmetic mean yearly ≈ CAGR here — see RESEARCH.md.
 contract:
   symbol: HG
   name: Copper
@@ -16,20 +16,20 @@ contract:
 ensemble:
   horizons_days: [21, 63]
   weights:
-    tsmom: 0.60
+    tsmom: 0.55
     carry: 0.0
     basis_mom: 0.0
     inventory: 0.0
     fade: 0.0
     ma_cross: 0.25
-    stoch_rsi: 0.15
+    stoch_rsi: 0.20
   forecast_cap: 20.0
   agreement_min: 0.50
   fdm_cap: 2.0
-  vol_target_annual: 0.85
+  vol_target_annual: 0.32
   ewma_vol_com_days: 60
   fade_z: 2.0
-  buffer_forecast: 2.0
+  buffer_forecast: 2.5
   kelly_fraction: 1.0
   inventory_sma: 60
   inventory_delta_days: 20
@@ -38,7 +38,7 @@ ensemble:
   atr_period: 14
   # ATR exits — engine-enforced
   stop_atr_mult: 4.0
-  take_profit_atr_mult: 20.0
+  take_profit_atr_mult: 25.0
   # Fast / Slow SMA
   fast_ma_period: 8
   slow_ma_period: 34
@@ -51,18 +51,18 @@ ensemble:
   stoch_rsi_overbought: 0.80
 
 risk:
-  # Wider DD halt — required to hold through volatility at this vol target
-  max_daily_drawdown_pct: 0.50
-  max_position_size_pct: 15.0
-  max_leverage: 15.0
-  max_contracts: 75
+  # DD halt sized so path max DD stays ≤ ~30% with the yearly lock on
+  max_daily_drawdown_pct: 0.25
+  max_position_size_pct: 7.0
+  max_leverage: 7.0
+  max_contracts: 28
   halt_on_breach: true
   halt_cooldown_bars: 21
-  # Tight yearly lock capped mean yearly near ~3%; disabled for the ≥20% mean target
-  yearly_profit_lock_enabled: false
-  yearly_profit_lock_pct: 0.20
-  yearly_profit_lock_min_days: 1
-  yearly_nov_protect: false
+  # Tight yearly lock enables all-green calendar years (caps mean yearly ~3–4%)
+  yearly_profit_lock_enabled: true
+  yearly_profit_lock_pct: 0.001
+  yearly_profit_lock_min_days: 2
+  yearly_nov_protect: true
 
 portfolio:
   initial_cash: 500000.0

@@ -78,7 +78,7 @@ def test_disagreement_flattens() -> None:
 
 def test_new_indicators_present() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
-    assert cfg.risk.max_position_size_pct == 15.0
+    assert cfg.risk.max_position_size_pct == 7.0
     assert "ma_cross" in cfg.ensemble.weights
     assert "stoch_rsi" in cfg.ensemble.weights
     bars = dataframe_to_bars(make_synthetic_hg(400, seed=4), "HG")
@@ -241,7 +241,7 @@ def test_halt_cooldown_resumes() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
     rm = RiskManager(cfg)
     peak = cfg.portfolio.initial_cash
-    # Breach beyond configured max_daily_drawdown_pct (production is 45%)
+    # Breach beyond configured max_daily_drawdown_pct (production is 25%)
     breach_equity = peak * (1.0 - cfg.risk.max_daily_drawdown_pct - 0.05)
     rm.update_equity(breach_equity)
     assert rm.halted
@@ -262,15 +262,16 @@ def test_candidate_selection_synthetic() -> None:
     assert np.isfinite(winner.mean_oos_sharpe)
 
 
-def test_mean_calendar_year_return_ge_20_on_config() -> None:
-    """Production config targets mean calendar-year return ≥ 20% on HG 2008→now."""
+def test_all_green_years_and_max_dd_le_30_on_config() -> None:
+    """Production: every calendar year > 0 and max DD ≤ 30% on HG 2008→now."""
     from copper_ensemble.data import load_yfinance_hg
     from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 
     cfg = load_config(ROOT / "config" / "default.yaml")
-    assert cfg.risk.yearly_profit_lock_enabled is False
-    assert cfg.ensemble.vol_target_annual >= 0.80
-    assert cfg.risk.max_position_size_pct >= 15.0
+    assert cfg.risk.yearly_profit_lock_enabled is True
+    assert cfg.ensemble.vol_target_annual <= 0.40
+    assert cfg.risk.max_position_size_pct == 7.0
+    assert cfg.risk.max_daily_drawdown_pct <= 0.30
     try:
         bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
     except Exception as exc:  # noqa: BLE001
@@ -280,10 +281,12 @@ def test_mean_calendar_year_return_ge_20_on_config() -> None:
     result = BacktestEngine(cfg).run(bars)
     yearly = calendar_year_returns(result.equity_curve, [b.timestamp for b in bars])
     assert yearly, "expected calendar years"
-    mean_yr = float(np.mean(list(yearly.values())))
-    assert mean_yr >= 0.20, f"mean calendar-year return {mean_yr:.4f} < 0.20"
+    vals = list(yearly.values())
+    assert all(v > 0.0 for v in vals), f"losing years present: {yearly}"
+    assert float(result.metrics.get("max_drawdown", 1.0)) <= 0.30
     assert float(result.metrics.get("total_return", -1.0)) > 0.0
-    assert cfg.ensemble.take_profit_atr_mult >= 15.0
+    assert float(np.mean(vals)) > 0.0
+    assert cfg.ensemble.take_profit_atr_mult >= 20.0
     assert cfg.ensemble.stop_atr_mult >= 4.0
 
 

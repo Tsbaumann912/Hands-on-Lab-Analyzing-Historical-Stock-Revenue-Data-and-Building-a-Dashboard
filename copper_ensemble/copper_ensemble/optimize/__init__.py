@@ -766,6 +766,43 @@ def build_default_candidates(base: Config) -> List[Tuple[str, Config]]:
                 },
             ),
         ),
+        (
+            "K_allgreen_dd30",
+            clone_config(
+                root,
+                ensemble_overrides={
+                    **anchor,
+                    "weights": {
+                        "tsmom": 0.55,
+                        "carry": 0.0,
+                        "basis_mom": 0.0,
+                        "inventory": 0.0,
+                        "fade": 0.0,
+                        "ma_cross": 0.25,
+                        "stoch_rsi": 0.20,
+                    },
+                    "horizons_days": [21, 63],
+                    "agreement_min": 0.50,
+                    "buffer_forecast": 2.5,
+                    "kelly_fraction": 1.0,
+                    "vol_target_annual": 0.32,
+                    "fast_ma_period": 8,
+                    "slow_ma_period": 34,
+                    "stop_atr_mult": 4.0,
+                    "take_profit_atr_mult": 25.0,
+                },
+                risk_overrides={
+                    "max_position_size_pct": 7.0,
+                    "max_leverage": 7.0,
+                    "max_contracts": 28,
+                    "max_daily_drawdown_pct": 0.25,
+                    "yearly_profit_lock_enabled": True,
+                    "yearly_profit_lock_pct": 0.001,
+                    "yearly_profit_lock_min_days": 2,
+                    "yearly_nov_protect": True,
+                },
+            ),
+        ),
     ]
 
 
