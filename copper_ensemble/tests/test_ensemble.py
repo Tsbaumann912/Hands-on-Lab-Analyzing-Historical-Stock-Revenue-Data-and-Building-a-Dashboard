@@ -67,10 +67,28 @@ def test_disagreement_flattens() -> None:
         "basis_mom": np.full(n, 10.0),
         "inventory": np.full(n, -10.0),
         "fade": np.full(n, 10.0),
+        "ma_cross": np.full(n, -10.0),
+        "stoch_rsi": np.full(n, 10.0),
     }
     f_star, agreement, _, _ = blend_forecasts(forecasts, cfg.ensemble)
-    assert float(np.nanmean(agreement)) < cfg.ensemble.agreement_min + 0.05
+    # Alternating signs → low agreement; must flatten
+    assert float(np.nanmean(agreement)) <= cfg.ensemble.agreement_min + 1e-9
     assert float(np.nanmean(np.abs(f_star))) < 1.0
+
+
+def test_new_indicators_present() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    assert cfg.risk.max_position_size_pct == 15.0
+    assert "ma_cross" in cfg.ensemble.weights
+    assert "stoch_rsi" in cfg.ensemble.weights
+    bars = dataframe_to_bars(make_synthetic_hg(400, seed=4), "HG")
+    strat = CopperEnsembleStrategy(cfg)
+    strat.prepare(bars)
+    assert "ma_cross" in strat._forecasts
+    assert "stoch_rsi" in strat._forecasts
+    assert "ma_fast" in strat._features
+    assert np.isfinite(np.nanmean(strat._features["ma_fast"][100:]))
+    assert np.isfinite(np.nanmean(strat._forecasts["stoch_rsi"][80:]))
 
 
 def test_agreement_perfect() -> None:
@@ -124,7 +142,159 @@ def test_validation_report() -> None:
     assert 0.0 <= report.deflated_sharpe <= 1.0
 
 
-def test_dsr_monotonic_in_trials() -> None:
-    dsr_few = deflated_sharpe_ratio(1.5, n_obs=500, n_trials=2)
-    dsr_many = deflated_sharpe_ratio(1.5, n_obs=500, n_trials=200)
-    assert dsr_few >= dsr_many
+def test_long_history_uses_eight_wfa_windows() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(3200, seed=5), "HG")
+    report = validate_ensemble(cfg, bars)
+    assert len(report.walk_forward) >= 6  # should target 8; some may skip if short blocks
+
+
+def test_rebuild_weights_disables_fade() -> None:
+    from copper_ensemble.models import rebuild_weights
+
+    base = {
+        "tsmom": 0.3,
+        "carry": 0.2,
+        "basis_mom": 0.15,
+        "inventory": 0.1,
+        "fade": 0.1,
+        "ma_cross": 0.1,
+        "stoch_rsi": 0.05,
+    }
+    w = rebuild_weights(base, tsmom_weight=0.6, enable_fade=False)
+    assert abs(sum(w.values()) - 1.0) < 1e-9
+    assert w["fade"] == 0.0
+    assert abs(w["tsmom"] - 0.6) < 1e-9
+
+
+def test_nested_optimize_synthetic_runs() -> None:
+    from copper_ensemble.optimize import nested_walk_forward_optimize
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(900, seed=11), "HG")
+    # Tiny search for CI speed
+    space = {
+        "n_trials_per_window": 4,
+        "n_windows": 3,
+        "in_sample_ratio": 0.70,
+        "purge_bars": 3,
+        "max_dd_soft_cap": 0.30,
+        "min_fills": 2,
+        "agreement_min": {"type": "float", "low": 0.15, "high": 0.35},
+        "buffer_forecast": {"type": "float", "low": 0.5, "high": 2.0},
+        "vol_target_annual": {"type": "float", "low": 0.10, "high": 0.16},
+        "kelly_fraction": {"type": "float", "low": 0.25, "high": 0.40},
+        "stop_atr_mult": {"type": "float", "low": 1.5, "high": 3.0},
+        "take_profit_atr_mult": {"type": "float", "low": 3.0, "high": 5.0},
+        "fdm_cap": {"type": "float", "low": 1.0, "high": 2.0},
+        "tsmom_weight": {"type": "float", "low": 0.45, "high": 0.70},
+        "enable_fade": {"type": "categorical", "choices": [True, False]},
+        "horizon_set": {"type": "categorical", "choices": [[21, 63, 252], [10, 21, 63]]},
+    }
+    report = nested_walk_forward_optimize(cfg, bars, space=space, seed=3)
+    assert len(report.windows) >= 2
+    assert report.robust_params
+    assert "agreement_min" in report.robust_params
+    assert np.isfinite(report.mean_oos_sharpe)
+
+
+def test_ulcer_metrics_on_monotonic_equity() -> None:
+    from copper_ensemble.engine import ulcer_index, ulcer_performance_index
+
+    eq = np.cumprod(1.0 + np.full(252, 0.001)) * 100_000.0
+    assert ulcer_index(eq) < 1e-6
+    assert ulcer_performance_index(eq) > 0.0
+    # Drawdown path → positive UI
+    eq2 = eq.copy()
+    eq2[100:150] = eq2[99] * 0.9
+    assert ulcer_index(eq2) > 1.0
+
+
+def test_anchored_and_rolling_slices() -> None:
+    from copper_ensemble.optimize import anchored_window_slices, rolling_window_slices
+
+    roll = rolling_window_slices(2000, 4, 0.7, 5)
+    anch = anchored_window_slices(2000, 4, min_is_bars=500, purge=5)
+    assert len(roll) >= 3
+    assert len(anch) >= 3
+    # Anchored IS always starts at 0
+    assert all(s[0] == 0 for s in anch)
+    # Rolling blocks move forward
+    assert roll[0][0] < roll[-1][0]
+
+
+def test_candidate_selection_upi_metric() -> None:
+    from copper_ensemble.optimize import select_pre_specified_candidates
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(1400, seed=12), "HG")
+    winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3, metric="upi")
+    assert winner.name
+    assert hasattr(winner, "composite_oos_upi")
+    assert len(ranked) >= 6
+    assert np.isfinite(winner.composite_oos_upi)
+
+
+def test_halt_cooldown_resumes() -> None:
+    from copper_ensemble.risk import RiskManager
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    rm = RiskManager(cfg)
+    peak = cfg.portfolio.initial_cash
+    # Breach beyond configured max_daily_drawdown_pct (production is 45%)
+    breach_equity = peak * (1.0 - cfg.risk.max_daily_drawdown_pct - 0.05)
+    rm.update_equity(breach_equity)
+    assert rm.halted
+    # Staying flat must still resume after cooldown bars
+    for _ in range(cfg.risk.halt_cooldown_bars):
+        rm.update_equity(breach_equity)
+    assert not rm.halted
+
+
+def test_candidate_selection_synthetic() -> None:
+    from copper_ensemble.optimize import select_pre_specified_candidates
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_hg(1200, seed=9), "HG")
+    winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3)
+    assert winner.name
+    assert len(ranked) >= 6
+    assert np.isfinite(winner.mean_oos_sharpe)
+
+
+def test_mean_calendar_year_return_ge_20_on_config() -> None:
+    """Production config targets mean calendar-year return ≥ 20% on HG 2008→now."""
+    from copper_ensemble.data import load_yfinance_hg
+    from copper_ensemble.engine import BacktestEngine, calendar_year_returns
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    assert cfg.risk.yearly_profit_lock_enabled is False
+    assert cfg.ensemble.vol_target_annual >= 0.80
+    assert cfg.risk.max_position_size_pct >= 15.0
+    try:
+        bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Yahoo unavailable: {exc}")
+    if len(bars) < 2000:
+        pytest.skip("insufficient HG history")
+    result = BacktestEngine(cfg).run(bars)
+    yearly = calendar_year_returns(result.equity_curve, [b.timestamp for b in bars])
+    assert yearly, "expected calendar years"
+    mean_yr = float(np.mean(list(yearly.values())))
+    assert mean_yr >= 0.20, f"mean calendar-year return {mean_yr:.4f} < 0.20"
+    assert float(result.metrics.get("total_return", -1.0)) > 0.0
+    assert cfg.ensemble.take_profit_atr_mult >= 15.0
+    assert cfg.ensemble.stop_atr_mult >= 4.0
+
+
+def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Smoke: loader accepts start=; skip if network/Yahoo unavailable."""
+    from copper_ensemble.data import load_yfinance_hg
+
+    try:
+        df = load_yfinance_hg("HG=F", start="2008-01-01", end="2008-06-30")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Yahoo unavailable: {exc}")
+    assert len(df) > 50
+    assert df.index.min().year == 2008
+

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -31,9 +31,84 @@ class BacktestResult:
     metrics: Dict[str, float] = field(default_factory=dict)
 
 
+def ulcer_index(equity: np.ndarray) -> float:
+    """
+    Peter Martin Ulcer Index from an equity curve.
+
+    Percentage drawdowns from running peak → RMS. Returned in **percent** units
+    (e.g. 5.0 means 5%).
+    """
+    if equity.size < 2:
+        return 0.0
+    peak = np.maximum.accumulate(equity)
+    # Percent drawdown series (0 at peaks, positive when underwater)
+    dd_pct = 100.0 * (peak - equity) / np.maximum(peak, 1e-12)
+    return float(np.sqrt(np.mean(np.square(dd_pct))))
+
+
+def ulcer_performance_index(
+    equity: np.ndarray,
+    *,
+    periods_per_year: float = 252.0,
+    risk_free_annual: float = 0.0,
+) -> float:
+    """
+    Ulcer Performance Index = (ann. return % − R_f %) / Ulcer Index.
+
+    Higher is better: reward for return per unit of drawdown pain.
+    """
+    if equity.size < 3 or equity[0] <= 0:
+        return 0.0
+    n = float(equity.size - 1)
+    total = float(equity[-1] / equity[0])
+    if total <= 0:
+        return -10.0
+    ann = total ** (periods_per_year / max(n, 1.0)) - 1.0
+    ann_pct = 100.0 * (ann - risk_free_annual)
+    ui = ulcer_index(equity)
+    if ui < 1e-9:
+        return 10.0 if ann_pct > 0 else (-10.0 if ann_pct < 0 else 0.0)
+    return float(ann_pct / ui)
+
+
+def calendar_year_returns(
+    equity: np.ndarray,
+    timestamps: Sequence[object],
+) -> Dict[int, float]:
+    """
+    Calendar-year equity returns (year-end / prior year-end − 1).
+
+    First year uses the first equity observation as the start mark.
+    """
+    if equity.size == 0 or len(timestamps) == 0:
+        return {}
+    n = min(int(equity.size), len(timestamps))
+    import pandas as pd
+
+    s = pd.Series(np.asarray(equity[:n], dtype=float), index=pd.to_datetime(list(timestamps[:n])))
+    out: Dict[int, float] = {}
+    prev: Optional[float] = None
+    for year in sorted(int(y) for y in s.index.year.unique()):
+        sy = s[s.index.year == year]
+        if sy.empty:
+            continue
+        start = float(prev if prev is not None else sy.iloc[0])
+        end = float(sy.iloc[-1])
+        out[year] = end / start - 1.0 if start > 0 else 0.0
+        prev = end
+    return out
+
+
 def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
     if equity.size < 3:
-        return {"sharpe": 0.0, "max_drawdown": 0.0, "total_return": 0.0}
+        return {
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "total_return": 0.0,
+            "ulcer_index": 0.0,
+            "upi": 0.0,
+            "cagr": 0.0,
+        }
     rets = np.diff(equity) / equity[:-1]
     rets = rets[np.isfinite(rets)]
     mu = float(np.mean(rets)) if rets.size else 0.0
@@ -41,12 +116,20 @@ def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
     sharpe = (mu / sd * np.sqrt(252.0)) if sd > 1e-12 else 0.0
     peak = np.maximum.accumulate(equity)
     dd = 1.0 - equity / np.maximum(peak, 1e-12)
+    total_return = float(equity[-1] / equity[0] - 1.0)
+    n = float(equity.size - 1)
+    cagr = float((equity[-1] / equity[0]) ** (252.0 / max(n, 1.0)) - 1.0) if equity[0] > 0 else 0.0
+    ui = ulcer_index(equity)
+    upi = ulcer_performance_index(equity)
     return {
         "sharpe": float(sharpe),
         "max_drawdown": float(np.max(dd)),
-        "total_return": float(equity[-1] / equity[0] - 1.0),
+        "total_return": total_return,
         "end_equity": float(equity[-1]),
         "n_bars": float(equity.size),
+        "ulcer_index": float(ui),
+        "upi": float(upi),
+        "cagr": float(cagr),
     }
 
 
@@ -94,12 +177,54 @@ class BacktestEngine:
         fills: List[Fill] = []
         signals: List[Signal] = []
         prev_close = bars[0].close
+        active_stop: Optional[float] = None
+        active_tp: Optional[float] = None
 
         for i, bar in enumerate(bars):
-            # MTM
+            # MTM to close first (path-independent baseline); stop/TP may flatten mid-bar.
+            prior_equity = equity
             if i > 0:
                 equity += position * mult * (bar.close - prev_close)
-            risk.update_equity(equity)
+            risk.update_equity(equity, bar.timestamp, prior_equity=prior_equity)
+
+            # Enforce per-trade stop / take-profit against bar high/low.
+            exited_by_bracket = False
+            if position != 0.0 and (active_stop is not None or active_tp is not None):
+                hit_px: Optional[float] = None
+                if position > 0:
+                    if active_stop is not None and bar.low <= active_stop:
+                        hit_px = float(active_stop)
+                    elif active_tp is not None and bar.high >= active_tp:
+                        hit_px = float(active_tp)
+                else:
+                    if active_stop is not None and bar.high >= active_stop:
+                        hit_px = float(active_stop)
+                    elif active_tp is not None and bar.low <= active_tp:
+                        hit_px = float(active_tp)
+                if hit_px is not None:
+                    # Rewind close MTM and mark exit at bracket price instead.
+                    if i > 0:
+                        equity -= position * mult * (bar.close - prev_close)
+                        equity += position * mult * (hit_px - prev_close)
+                    delta = -position
+                    trade_px = hit_px + slip if delta > 0 else hit_px - slip
+                    cost = abs(delta) * commission
+                    equity -= cost
+                    equity -= abs(delta) * mult * abs(trade_px - hit_px)
+                    fills.append(
+                        Fill(
+                            timestamp=bar.timestamp,
+                            direction=Direction.LONG if delta > 0 else Direction.SHORT,
+                            quantity=abs(delta),
+                            price=trade_px,
+                            commission=cost,
+                        )
+                    )
+                    position = 0.0
+                    active_stop = None
+                    active_tp = None
+                    exited_by_bracket = True
+                    risk.update_equity(equity, bar.timestamp, prior_equity=prior_equity)
 
             raw_sig = strat.signal_at(i)
             decision = risk.evaluate(raw_sig, bar.close)
@@ -107,16 +232,17 @@ class BacktestEngine:
             signals.append(sig)
 
             target = 0.0
-            if sig.direction == Direction.LONG:
-                target = float(sig.suggested_size or 0.0)
-            elif sig.direction == Direction.SHORT:
-                target = -float(sig.suggested_size or 0.0)
+            if not exited_by_bracket:
+                if sig.direction == Direction.LONG:
+                    target = float(sig.suggested_size or 0.0)
+                elif sig.direction == Direction.SHORT:
+                    target = -float(sig.suggested_size or 0.0)
+            # If bracket flattened, stay flat this bar (no re-entry same bar).
 
             delta = target - position
             if abs(delta) >= 1.0:
                 trade_px = bar.close + slip if delta > 0 else bar.close - slip
                 cost = abs(delta) * commission
-                # cash impact of paying commission; entry mark at close already in MTM path
                 equity -= cost
                 fills.append(
                     Fill(
@@ -127,8 +253,14 @@ class BacktestEngine:
                         commission=cost,
                     )
                 )
-                # slippage cash vs mid
                 equity -= abs(delta) * mult * abs(trade_px - bar.close)
+                # Update bracket levels when opening / flipping; clear when flat.
+                if target == 0.0:
+                    active_stop = None
+                    active_tp = None
+                elif np.sign(target) != np.sign(position) or position == 0.0:
+                    active_stop = sig.stop_loss
+                    active_tp = sig.take_profit
                 position = target
 
             eq_curve[i] = equity
@@ -140,6 +272,12 @@ class BacktestEngine:
         rets[1:] = np.diff(eq_curve) / np.maximum(eq_curve[:-1], 1e-12)
         metrics = _compute_metrics(eq_curve)
         metrics["n_fills"] = float(len(fills))
+        yearly = calendar_year_returns(eq_curve, [b.timestamp for b in bars])
+        if yearly:
+            metrics["n_profitable_years"] = float(sum(1 for r in yearly.values() if r > 0))
+            metrics["n_losing_years"] = float(sum(1 for r in yearly.values() if r < 0))
+            metrics["min_year_return"] = float(min(yearly.values()))
+            metrics["n_calendar_years"] = float(len(yearly))
         return BacktestResult(
             equity_curve=eq_curve,
             returns=rets,

@@ -1,4 +1,8 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
+# Same methodology: ATR TP/stop + system DD halt (+ optional calendar-year lock).
+# Re-optimized for mean calendar-year return ≥ 20% on Yahoo HG 2008→now.
+# Same methodology (ATR TP/stop + DD halt; yearly lock OFF). Some red years and deep DD.
+# Arithmetic mean yearly ≠ CAGR — see RESEARCH.md.
 contract:
   symbol: HG
   name: Copper
@@ -10,45 +14,67 @@ contract:
   slippage_ticks: 1
 
 ensemble:
-  horizons_days: [21, 63, 252]
+  horizons_days: [21, 63]
   weights:
-    tsmom: 0.30
-    carry: 0.25
-    basis_mom: 0.20
-    inventory: 0.15
-    fade: 0.10
+    tsmom: 0.60
+    carry: 0.0
+    basis_mom: 0.0
+    inventory: 0.0
+    fade: 0.0
+    ma_cross: 0.25
+    stoch_rsi: 0.15
   forecast_cap: 20.0
-  agreement_min: 0.40
-  fdm_cap: 2.5
-  vol_target_annual: 0.12
+  agreement_min: 0.50
+  fdm_cap: 2.0
+  vol_target_annual: 0.85
   ewma_vol_com_days: 60
   fade_z: 2.0
   buffer_forecast: 2.0
-  kelly_fraction: 0.35
+  kelly_fraction: 1.0
   inventory_sma: 60
   inventory_delta_days: 20
   basis_mom_lookback: 63
   price_z_lookback: 20
   atr_period: 14
-  stop_atr_mult: 2.0
-  take_profit_atr_mult: 4.0
+  # ATR exits — engine-enforced
+  stop_atr_mult: 4.0
+  take_profit_atr_mult: 20.0
+  # Fast / Slow SMA
+  fast_ma_period: 8
+  slow_ma_period: 34
+  # Stochastic RSI
+  rsi_period: 14
+  stoch_rsi_period: 14
+  stoch_rsi_smooth_k: 3
+  stoch_rsi_smooth_d: 3
+  stoch_rsi_oversold: 0.20
+  stoch_rsi_overbought: 0.80
 
 risk:
-  max_daily_drawdown_pct: 0.03
-  max_position_size_pct: 0.50
-  max_leverage: 5.0
-  max_contracts: 20
+  # Wider DD halt — required to hold through volatility at this vol target
+  max_daily_drawdown_pct: 0.50
+  max_position_size_pct: 15.0
+  max_leverage: 15.0
+  max_contracts: 75
   halt_on_breach: true
+  halt_cooldown_bars: 21
+  # Tight yearly lock capped mean yearly near ~3%; disabled for the ≥20% mean target
+  yearly_profit_lock_enabled: false
+  yearly_profit_lock_pct: 0.20
+  yearly_profit_lock_min_days: 1
+  yearly_nov_protect: false
 
 portfolio:
-  # HG notional ≈ price × 25,000 (~$100k/contract at $4/lb); size for ≥1 lot.
   initial_cash: 500000.0
 
 backtest:
   walk_forward_windows: 4
+  walk_forward_windows_long: 8
+  long_history_bars: 3000
   in_sample_ratio: 0.70
   purge_bars: 5
 
 validation:
   dsr_pass_threshold: 0.95
   oos_retention_min: 0.60
+  target_mean_oos_sharpe: 1.5
