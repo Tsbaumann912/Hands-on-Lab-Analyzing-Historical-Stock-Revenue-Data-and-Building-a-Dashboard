@@ -1,8 +1,8 @@
 # Standalone COMEX Copper (HG) ensemble CTA — independent of QuantTerminal.
 # Same methodology: ATR TP/stop + system DD halt (+ optional calendar-year lock).
-# Re-optimized for mean calendar-year return ≥ 15% on Yahoo HG 2008→now.
-# Tradeoff vs prior all-green book: yearly lock OFF, higher vol/size, some red years,
-# deep path drawdowns. Arithmetic mean yearly ≠ CAGR — see RESEARCH.md.
+# Re-optimized for mean calendar-year return ≥ 20% on Yahoo HG 2008→now.
+# Same methodology (ATR TP/stop + DD halt; yearly lock OFF). Some red years and deep DD.
+# Arithmetic mean yearly ≠ CAGR — see RESEARCH.md.
 contract:
   symbol: HG
   name: Copper
@@ -16,17 +16,17 @@ contract:
 ensemble:
   horizons_days: [21, 63]
   weights:
-    tsmom: 0.70
+    tsmom: 0.60
     carry: 0.0
     basis_mom: 0.0
     inventory: 0.0
     fade: 0.0
-    ma_cross: 0.20
-    stoch_rsi: 0.10
+    ma_cross: 0.25
+    stoch_rsi: 0.15
   forecast_cap: 20.0
   agreement_min: 0.50
   fdm_cap: 2.0
-  vol_target_annual: 0.80
+  vol_target_annual: 0.85
   ewma_vol_com_days: 60
   fade_z: 2.0
   buffer_forecast: 2.0
@@ -37,7 +37,7 @@ ensemble:
   price_z_lookback: 20
   atr_period: 14
   # ATR exits — engine-enforced
-  stop_atr_mult: 6.0
+  stop_atr_mult: 4.0
   take_profit_atr_mult: 20.0
   # Fast / Slow SMA
   fast_ma_period: 8
@@ -52,13 +52,13 @@ ensemble:
 
 risk:
   # Wider DD halt — required to hold through volatility at this vol target
-  max_daily_drawdown_pct: 0.45
-  max_position_size_pct: 20.0
-  max_leverage: 20.0
-  max_contracts: 100
+  max_daily_drawdown_pct: 0.50
+  max_position_size_pct: 15.0
+  max_leverage: 15.0
+  max_contracts: 75
   halt_on_breach: true
   halt_cooldown_bars: 21
-  # Tight yearly lock capped mean yearly near ~3%; disabled for the 15% mean target
+  # Tight yearly lock capped mean yearly near ~3%; disabled for the ≥20% mean target
   yearly_profit_lock_enabled: false
   yearly_profit_lock_pct: 0.20
   yearly_profit_lock_min_days: 1

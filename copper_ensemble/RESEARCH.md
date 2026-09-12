@@ -74,26 +74,27 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
 2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
-**Production choice (2008→now):** `I_mean15_annual` — targets **arithmetic mean calendar-year return ≥ 15%** via:
+**Production choice (2008→now):** `J_mean20_annual` — targets **arithmetic mean calendar-year return ≥ 20%** via:
 
-1. Horizons `[21, 63]`, agreement 0.50, TSMOM-heavy blend (`tsmom=0.70`, `ma_cross=0.20`, `stoch_rsi=0.10`).
-2. **Yearly profit lock OFF** (the prior 0.2% lock capped mean yearly near ~3%).
-3. Higher risk budget: `vol_target_annual=0.80`, `max_position_size_pct=20`, `max_contracts=100`,
-   `max_daily_drawdown_pct=0.45`, ATR stop 6 / TP 20, Kelly 1.0.
+1. Horizons `[21, 63]`, agreement 0.50, blend `tsmom=0.60` / `ma_cross=0.25` / `stoch_rsi=0.15`.
+2. **Yearly profit lock OFF** (same methodology as the ≥15% book; tight lock caps mean yearly near ~3%).
+3. Risk budget: `vol_target_annual=0.85`, `max_position_size_pct=15`, `max_contracts=75`,
+   `max_daily_drawdown_pct=0.50`, ATR stop 4 / TP 20, Kelly 1.0.
 
-### Can mean calendar-year return reach 15%?
+### Can mean calendar-year return reach 20%?
 
-**Yes — if the all-green / tight yearly-lock constraint is dropped.**
+**Yes — under the same ATR/DD/ensemble methodology with the yearly lock disabled.**
 
 | Constraint | Result |
 |---|---|
-| Target | arithmetic mean calendar-year return ≥ **15%** |
-| Production (`I_mean15_annual`) | mean yearly ≈ **+21.4%**, total ≈ **+169%**, CAGR ≈ **+5.5%**, **10** losing years, max DD ≈ **85%** |
+| Target | arithmetic mean calendar-year return ≥ **20%** |
+| Production (`J_mean20_annual`) | mean yearly ≈ **+23.3%**, total ≈ **+303%**, CAGR ≈ **+7.8%**, **10** losing years, max DD ≈ **76%** |
+| Prior ≥15% book (`I_mean15_annual`) | mean yearly ≈ **+21.4%**, total ≈ **+169%**, CAGR ≈ **+5.5%**, max DD ≈ **85%** |
 | Prior all-green + 0.2% lock | mean yearly ≈ **+3.0%**, total ≈ **+74%**, **0** losing years |
 | HG buy&hold 2008→now | mean yearly ≈ **10%**, **7** losing years |
 | Mean ≥ 30% + all-green | **Not found** — see below |
 
-**Honest tradeoff:** arithmetic mean of calendar years can sit well above CAGR when a few huge up-years dominate (e.g. 2008/2020). Path drawdowns are severe (~85% max DD). This is an **in-sample calendar objective**, not a claim of smooth 15% compounded.
+**Honest tradeoff:** arithmetic mean of calendar years can sit well above CAGR when a few huge up-years dominate (e.g. 2008/2020). Path drawdowns remain severe (~76% max DD). This is an **in-sample calendar objective**, not a claim of smooth 20% compounded.
 
 ### Can mean calendar-year return reach 30% with all years green?
 
@@ -106,7 +107,7 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 | Aggressive leverage search (vol ≤ 2, pos ≤ 50×, lock ≥ 30%) | **0** all-green configs; high means come with ruin years |
 | Best all-green ceiling found | mean yearly ≈ **3.0%**, total ≈ **+74%**, min year ≈ **+0.28%** |
 
-Legacy candidate `H_yearly_profit` keeps the all-green / tight-lock book for comparison.
+Legacy candidates `H_yearly_profit` (all-green) and `I_mean15_annual` remain in the menu for comparison.
 
 ```bash
 cd copper_ensemble

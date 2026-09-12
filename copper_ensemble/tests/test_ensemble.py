@@ -78,7 +78,7 @@ def test_disagreement_flattens() -> None:
 
 def test_new_indicators_present() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
-    assert cfg.risk.max_position_size_pct == 20.0
+    assert cfg.risk.max_position_size_pct == 15.0
     assert "ma_cross" in cfg.ensemble.weights
     assert "stoch_rsi" in cfg.ensemble.weights
     bars = dataframe_to_bars(make_synthetic_hg(400, seed=4), "HG")
@@ -262,14 +262,14 @@ def test_candidate_selection_synthetic() -> None:
     assert np.isfinite(winner.mean_oos_sharpe)
 
 
-def test_mean_calendar_year_return_ge_15_on_config() -> None:
-    """Production config targets mean calendar-year return ≥ 15% on HG 2008→now."""
+def test_mean_calendar_year_return_ge_20_on_config() -> None:
+    """Production config targets mean calendar-year return ≥ 20% on HG 2008→now."""
     from copper_ensemble.data import load_yfinance_hg
     from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 
     cfg = load_config(ROOT / "config" / "default.yaml")
     assert cfg.risk.yearly_profit_lock_enabled is False
-    assert cfg.ensemble.vol_target_annual >= 0.70
+    assert cfg.ensemble.vol_target_annual >= 0.80
     assert cfg.risk.max_position_size_pct >= 15.0
     try:
         bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
@@ -281,7 +281,7 @@ def test_mean_calendar_year_return_ge_15_on_config() -> None:
     yearly = calendar_year_returns(result.equity_curve, [b.timestamp for b in bars])
     assert yearly, "expected calendar years"
     mean_yr = float(np.mean(list(yearly.values())))
-    assert mean_yr >= 0.15, f"mean calendar-year return {mean_yr:.4f} < 0.15"
+    assert mean_yr >= 0.20, f"mean calendar-year return {mean_yr:.4f} < 0.20"
     assert float(result.metrics.get("total_return", -1.0)) > 0.0
     assert cfg.ensemble.take_profit_atr_mult >= 15.0
     assert cfg.ensemble.stop_atr_mult >= 4.0
