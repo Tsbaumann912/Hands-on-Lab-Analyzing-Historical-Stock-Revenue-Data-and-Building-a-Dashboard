@@ -7,8 +7,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from flask import Flask, Response, jsonify, render_template_string, request
+from flask import Flask, Response, jsonify, render_template_string, request, send_file
 
+from copper_ensemble import __version__
 from copper_ensemble.data import dataframe_to_bars, load_yfinance_hg, make_synthetic_hg
 from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 from copper_ensemble.models import load_config
@@ -18,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "default.yaml"
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "config" / "default.yaml"
+RELEASE_ZIP = ROOT / "releases" / f"copper-ensemble-allgreen-dd30-v{__version__}.zip"
+RELEASE_SHA = RELEASE_ZIP.with_suffix(RELEASE_ZIP.suffix + ".sha256")
 
 DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -71,6 +75,24 @@ DASHBOARD_HTML = """
       line-height: 1.45;
       margin: 0;
     }
+    .header-actions {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    a.btn-download {
+      display: inline-block;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--accent2), #1f7a6e);
+      color: #f3fffb;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+    }
+    a.btn-download:hover { filter: brightness(1.08); }
+    .ver { color: var(--muted); font-size: 0.85rem; }
     main {
       max-width: 1100px;
       margin: 0 auto;
@@ -143,6 +165,10 @@ DASHBOARD_HTML = """
   <header>
     <h1 class="brand">Copper Ensemble</h1>
     <p class="tag">Standalone COMEX HG CTA — TSMOM + Fast/Slow MA + Stochastic RSI with calendar-year profit lock (flatten once YTD is green).</p>
+    <div class="header-actions">
+      <a class="btn-download" href="/download">Download strategy package (zip)</a>
+      <span class="ver">v{{ version }} · all-green years · max DD ≤ 30%</span>
+    </div>
   </header>
   <main>
     <section class="panel">
@@ -362,7 +388,35 @@ def health() -> Response:
 
 @app.get("/")
 def index() -> str:
-    return render_template_string(DASHBOARD_HTML)
+    return render_template_string(DASHBOARD_HTML, version=__version__)
+
+
+@app.get("/download")
+def download_package() -> Any:
+    """Serve the pre-built strategy zip for offline install."""
+    if not RELEASE_ZIP.is_file():
+        return (
+            jsonify(
+                {
+                    "error": "Release zip not found. Run: bash scripts/build_release.sh",
+                    "expected": str(RELEASE_ZIP),
+                }
+            ),
+            404,
+        )
+    return send_file(
+        RELEASE_ZIP,
+        as_attachment=True,
+        download_name=RELEASE_ZIP.name,
+        mimetype="application/zip",
+    )
+
+
+@app.get("/download/sha256")
+def download_sha256() -> Any:
+    if not RELEASE_SHA.is_file():
+        return jsonify({"error": "sha256 file missing", "expected": str(RELEASE_SHA)}), 404
+    return send_file(RELEASE_SHA, as_attachment=True, download_name=RELEASE_SHA.name)
 
 
 @app.post("/api/run")

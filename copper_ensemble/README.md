@@ -4,6 +4,22 @@ Standalone systematic trading research and backtest project for **COMEX Copper (
 
 This package is **not** part of QuantTerminal. It has zero imports from QuantTerminal and can be copied or published as its own repository.
 
+## Download
+
+Pre-built release zip (production book: all calendar years green, max DD ≤ 30%):
+
+- [`releases/copper-ensemble-allgreen-dd30-v0.2.0.zip`](releases/copper-ensemble-allgreen-dd30-v0.2.0.zip)
+- Install guide: [`DOWNLOAD.md`](DOWNLOAD.md)
+
+```bash
+unzip copper-ensemble-allgreen-dd30-v0.2.0.zip
+cd copper-ensemble-allgreen-dd30-v0.2.0
+pip install -r requirements.txt && pip install -e .
+python -m copper_ensemble.cli backtest --synthetic
+```
+
+Rebuild the zip anytime with `bash scripts/build_release.sh`.
+
 ## What it does
 
 Combines five economically motivated forecast sleeves into one vol-targeted ensemble:
