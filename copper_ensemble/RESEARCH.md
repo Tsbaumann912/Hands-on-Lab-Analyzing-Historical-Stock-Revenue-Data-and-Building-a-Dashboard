@@ -82,6 +82,25 @@ Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 3. **Enforced ATR stop / take-profit** in the backtest engine (`stop_atr_mult=4`,
    `take_profit_atr_mult=25`) plus system drawdown halt (`max_daily_drawdown_pct=0.15`).
 
+### Can mean calendar-year return ≥ 20% with max system DD < 30%?
+
+**No — not on single-name COMEX HG under this methodology (ATR TP/stop + DD halt + ensemble ± yearly lock).**
+
+Searched **1,050+** lock-off/lock-on configs and **384** soft-lock configs on Yahoo HG 2008→now:
+
+| Constraint | Result |
+|---|---|
+| Target | arithmetic mean calendar-year ≥ **20%** **and** path max DD **< 30%** |
+| Hits found | **0** |
+| Best mean with DD < 30% | ≈ **+4.1%** (tight yearly lock required) |
+| Best mean with DD < 50% | ≈ **+15.9%** (still short of 20%) |
+| Lowest DD among mean ≥ 20% | ≈ **89%** (ruin path; lock off, high vol/pos) |
+| Soft yearly lock (5–25%) | still **0** dual hits; mean≥20% remains ~99%+ DD |
+
+**Pareto read:** under DD < 30% the yearly lock caps mean yearly near ~3–4%. Unlocking (or softening) the lock is what lifts arithmetic mean toward/above 20%, but path drawdowns blow out to ~90%+. Same knobs cannot clear both gates together on this single-name HG sample.
+
+Production remains the **DD-aware yearly-lock book** (all-green / low DD), not an unmet 20%+DD<30 dual target. Search artifacts: `scripts/probe_mean20_dd30.py`, `/opt/cursor/artifacts/copper_mean20_dd30_probe.json`.
+
 ### Can mean calendar-year return reach 30%?
 
 **No — not on single-name COMEX HG under this methodology.**
