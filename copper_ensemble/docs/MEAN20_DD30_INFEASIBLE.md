@@ -19,7 +19,10 @@
 
 ## Production
 
-Left unchanged: DD-aware yearly-lock book (~3% mean yearly, DD ~26.5%, all calendar years green). Shipping a “20% / DD<30%” config would be false — no such point exists on this Pareto surface.
+Re-optimized for **max profit under DD < 30%** (not the unmet 20% mean target):
+`L_maxprofit_dd30` ≈ **+105%** total / **~3.9%** mean yearly / **~29.9%** max DD /
+all calendar years green. Shipping a “20% mean / DD<30%” config would still be false —
+no such point exists on this Pareto surface.
 
 Artifacts:
 - `/opt/cursor/artifacts/copper_mean20_dd30_probe.json`
