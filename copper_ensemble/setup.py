@@ -18,6 +18,7 @@ setup(
     entry_points={
         "console_scripts": [
             "copper-ensemble=copper_ensemble.cli:main",
+            "copper-ensemble-web=copper_ensemble.web:main",
         ],
     },
     include_package_data=True,
