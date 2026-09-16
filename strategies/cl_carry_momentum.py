@@ -163,6 +163,8 @@ class CLCarryMomentum(Strategy):
                 "carry_spread": round(float(carry[-1]), 6)
                 if np.isfinite(carry[-1])
                 else None,
+                "close": round(float(close), 6),
+                "price": round(float(close), 6),
                 "fast_ma": round(float(f_ma), 4),
                 "slow_ma": round(float(s_ma), 4),
                 "stoch_rsi_k": round(float(k), 4),

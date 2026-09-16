@@ -210,11 +210,13 @@ class WalkForwardOptimizer:
         strategy_cls: Type[Strategy],
         search_space: SearchSpace,
         objective_metric: str = "sharpe_ratio",
+        oos_warmup_bars: int = 320,
     ) -> None:
         self._config = config
         self._strategy_cls = strategy_cls
         self._search_space = search_space
         self._objective_metric = objective_metric
+        self._oos_warmup_bars = max(0, int(oos_warmup_bars))
         self._engine = BacktestEngine(config, strategy_cls)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -312,7 +314,9 @@ class WalkForwardOptimizer:
                 window.window_id,
                 best_params,
             )
-            oos_result = self._engine.run(window.oos_bars, strategy_params=best_params)
+            oos_result = self._evaluate_oos(
+                window.is_bars, window.oos_bars, best_params
+            )
             window.oos_result = oos_result
             oos_metrics_list.append(oos_result.metrics)
             best_params_list.append(best_params)
@@ -323,6 +327,59 @@ class WalkForwardOptimizer:
             windows=windows,
             aggregated_oos_metrics=aggregated,
             best_params_per_window=best_params_list,
+        )
+
+    def _evaluate_oos(
+        self,
+        is_bars: Dict[str, List[Bar]],
+        oos_bars: Dict[str, List[Bar]],
+        params: Dict[str, Any],
+    ) -> BacktestResult:
+        """
+        Run OOS with trailing IS bars prepended as indicator warm-up.
+
+        Equity / metrics are trimmed to the OOS segment only so warm-up P&L
+        does not leak into out-of-sample scores.
+        """
+        from engine.metrics import compute_metrics
+
+        warmup = self._oos_warmup_bars
+        combined: Dict[str, List[Bar]] = {}
+        warm_n = 0
+        for sym, oos in oos_bars.items():
+            is_sym = is_bars.get(sym, [])
+            warm = is_sym[-warmup:] if warmup > 0 else []
+            warm_n = len(warm)
+            combined[sym] = list(warm) + list(oos)
+
+        result = self._engine.run(combined, strategy_params=params)
+        eq = np.asarray(result.equity_curve, dtype=np.float64)
+        if warm_n > 0 and len(eq) > warm_n:
+            oos_eq = eq[warm_n:]
+        else:
+            oos_eq = eq
+
+        if len(oos_eq) >= 2:
+            # Rebase to the configured starting cash so window metrics are
+            # comparable across folds (returns unchanged by a positive scale).
+            cash0 = float(self._config.portfolio.initial_cash)
+            if oos_eq[0] != 0.0 and np.isfinite(oos_eq[0]):
+                oos_eq = oos_eq * (cash0 / oos_eq[0])
+            metrics = compute_metrics(
+                oos_eq,
+                risk_free_rate=float(
+                    getattr(self._config.backtest, "risk_free_rate", 0.05)
+                ),
+            )
+        else:
+            metrics = {}
+
+        return BacktestResult(
+            metrics=metrics,
+            equity_curve=oos_eq,
+            trade_log=result.trade_log,
+            fills=result.fills,
+            config_snapshot=result.config_snapshot,
         )
 
     # ── Internal ──────────────────────────────────────────────────────────────

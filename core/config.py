@@ -175,6 +175,7 @@ class CLValidationConfig:
     periods_per_year: int = 252
     # Futures risk premia are usually evaluated vs 0 cash yield in the futures P&L.
     metrics_risk_free_rate: float = 0.0
+    oos_warmup_bars: int = 320
 
 
 @dataclass

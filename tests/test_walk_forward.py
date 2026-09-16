@@ -164,6 +164,7 @@ class TestWalkForwardSmoke:
         cfg.risk.halt_on_breach = False
         cfg.risk.max_daily_drawdown_pct = 0.99
         cfg.backtest.risk_free_rate = 0.0
+        cfg.cl_validation.oos_warmup_bars = 80
 
         bars = _bars(2200)
         space = build_search_space_from_yaml(
@@ -184,3 +185,6 @@ class TestWalkForwardSmoke:
         )
         assert len(report.wfo.windows) >= 1
         assert "passed" in report.gates.to_dict()
+        # With warm-up, OOS equity should have length ~= oos_bars
+        assert report.wfo.windows[0].oos_result is not None
+        assert len(report.wfo.windows[0].oos_result.equity_curve) >= 50

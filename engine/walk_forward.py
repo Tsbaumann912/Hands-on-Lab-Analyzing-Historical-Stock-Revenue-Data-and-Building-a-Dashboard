@@ -257,7 +257,13 @@ class WalkForwardValidator:
         self._objective_metric = objective_metric
         self._thresholds = thresholds or GateThresholds()
         self._optimizer = WalkForwardOptimizer(
-            config, strategy_cls, search_space, objective_metric=objective_metric
+            config,
+            strategy_cls,
+            search_space,
+            objective_metric=objective_metric,
+            oos_warmup_bars=int(
+                getattr(config.cl_validation, "oos_warmup_bars", 320)
+            ),
         )
 
     def run_mode(

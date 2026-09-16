@@ -143,6 +143,7 @@ cl_validation:
   risk_max_leverage: 10.0
   periods_per_year: 252
   metrics_risk_free_rate: 0.0
+  oos_warmup_bars: 320
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

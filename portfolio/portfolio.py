@@ -41,7 +41,8 @@ class Position:
     def mark_to_market(self, current_price: float) -> float:
         """Update unrealised P&L and return the new value."""
         price_diff = current_price - self.avg_entry_price
-        sign = 1.0 if self.direction == Direction.LONG else -1.0
+        # Derive side from signed quantity (source of truth after flips).
+        sign = 1.0 if self.quantity >= 0 else -1.0
         self.unrealised_pnl = (
             sign * price_diff * abs(self.quantity) * self.contract_multiplier
         )
@@ -190,15 +191,40 @@ class Portfolio:
             ) / total_qty
             pos.quantity = new_qty
 
-        else:
-            # Partial close — realise P&L on the closed portion
-            close_qty = min(abs(pos.quantity), abs(qty_signed))
+        elif abs(qty_signed) < abs(pos.quantity):
+            # Partial close — realise P&L on the closed portion; side unchanged
+            close_qty = abs(qty_signed)
             realised = self._compute_realised_pnl(pos, fill.fill_price, close_qty)
             pos.realised_pnl += realised
             self._cash += realised
             pos.quantity = new_qty
-            if abs(new_qty) < 1e-9:
-                del self._positions[fill.symbol]
+
+        else:
+            # Reverse through flat: close old side, open residual opposite side.
+            # Must update direction + avg entry or backtest treats every later
+            # bar as another flip and doubles size.
+            close_qty = abs(pos.quantity)
+            realised = self._compute_realised_pnl(pos, fill.fill_price, close_qty)
+            self._cash += realised
+            residual = abs(new_qty)
+            new_direction = Direction.LONG if new_qty > 0 else Direction.SHORT
+            self._positions[fill.symbol] = Position(
+                symbol=fill.symbol,
+                direction=new_direction,
+                quantity=new_qty,
+                avg_entry_price=fill.fill_price,
+                contract_multiplier=pos.contract_multiplier,
+                open_time=fill.timestamp,
+                realised_pnl=pos.realised_pnl + realised,
+            )
+            logger.info(
+                "FLIP %s → %s @ %.4f residual=%.0f realised_pnl=%.2f",
+                pos.direction.value,
+                new_direction.value,
+                fill.fill_price,
+                residual,
+                realised,
+            )
 
     @staticmethod
     def _compute_realised_pnl(pos: Position, exit_price: float, qty: float) -> float:
