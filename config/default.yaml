@@ -131,8 +131,8 @@ cl_validation:
   rolling_is_years: 5.0
   rolling_oos_years: 1.0
   purge_bars: 5
-  n_trials: 25
-  timeout_seconds: 120
+  n_trials: 40
+  timeout_seconds: 180
   max_dd_limit: 0.30              # system MaxDD gate (promotion)
   min_sharpe: 0.0
   min_upi: 0.0
@@ -144,6 +144,10 @@ cl_validation:
   periods_per_year: 252
   metrics_risk_free_rate: 0.0
   oos_warmup_bars: 320
+  objective_metric: cagr          # maximise annualised + total return blend
+  require_all_years_profitable: true
+  min_year_return: 0.0
+  min_year_bars: 60               # skip stub edge years (< ~3 months)
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

@@ -129,6 +129,46 @@ class TestGatesAndStitch:
         assert not g.passed
         assert any("max_drawdown" in f for f in g.failures)
 
+    def test_evaluate_gates_require_yearly_profit(self):
+        from engine.metrics import calendar_year_returns
+
+        base = datetime(2010, 1, 1, tzinfo=timezone.utc)
+        # 2010 up, 2011 down → fail year gate
+        n = 400
+        eq = np.concatenate(
+            [np.linspace(100, 120, 200), np.linspace(120, 90, 200)]
+        )
+        ts = np.array([base + timedelta(days=i) for i in range(n)], dtype=object)
+        years = calendar_year_returns(eq, ts, min_bars=2)
+        assert any(r <= 0 for r in years.values())
+        metrics = {
+            "sharpe_ratio": 0.5,
+            "ulcer_performance_index": 0.5,
+            "cagr": 0.05,
+            "max_drawdown": -0.1,
+        }
+        g = evaluate_gates(
+            metrics,
+            GateThresholds(require_all_years_profitable=True, min_year_bars=2),
+            equity_curve=eq,
+            equity_timestamps=ts,
+        )
+        assert not g.passed
+        assert any("year_" in f for f in g.failures)
+
+    def test_calendar_year_returns_all_positive(self):
+        from engine.metrics import all_calendar_years_profitable
+
+        base = datetime(2012, 1, 1, tzinfo=timezone.utc)
+        eq = np.linspace(100, 150, 500)
+        ts = np.array([base + timedelta(days=i) for i in range(500)], dtype=object)
+        ok, years, failures = all_calendar_years_profitable(
+            eq, ts, min_bars=2, min_year_return=0.0
+        )
+        assert ok
+        assert failures == []
+        assert all(r > 0 for r in years.values())
+
     def test_stitch_oos_equity_compounds(self):
         from engine.backtest import BacktestResult
 

@@ -142,24 +142,67 @@ def stitch_oos_equity(
     Uses period returns from each window's OOS equity so capital compounds
     across folds without resetting to the window-local starting equity.
     """
+    eq, _ = stitch_oos_equity_timed(window_results, initial_cash)
+    return eq
+
+
+def stitch_oos_equity_timed(
+    window_results: Sequence[WFOWindow],
+    initial_cash: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Like ``stitch_oos_equity`` but also returns timestamps aligned 1:1 with equity.
+
+    The synthetic starting cash point inherits the first available OOS timestamp
+    (or is omitted from year gating when no stamps exist).
+    """
     equity = float(initial_cash)
     path: List[float] = [equity]
+    times: List[Any] = []
+    first_ts: Any = None
+
     for window in window_results:
         result = window.oos_result
         if result is None or len(result.equity_curve) < 2:
             continue
         eq = np.asarray(result.equity_curve, dtype=np.float64)
+        ts = result.equity_timestamps
         with np.errstate(divide="ignore", invalid="ignore"):
             rets = np.diff(eq) / np.where(eq[:-1] != 0.0, eq[:-1], np.nan)
-        rets = rets[np.isfinite(rets)]
+        valid = np.isfinite(rets)
+        rets = rets[valid]
         if len(rets) == 0:
             continue
-        # Compound onto the running equity path (vectorised growth factors).
+
         growth = np.cumprod(1.0 + rets)
         segment = equity * growth
         path.extend(segment.tolist())
         equity = float(segment[-1])
-    return np.asarray(path, dtype=np.float64)
+
+        if ts is not None and len(ts) == len(eq):
+            seg_ts = [ts[i + 1] for i, ok in enumerate(valid) if ok]
+            if first_ts is None and len(ts) > 0:
+                first_ts = ts[0]
+            times.extend(seg_ts)
+        elif window.oos_bars:
+            # Fall back to OOS bar timestamps when engine stamps are missing.
+            ref = next(iter(window.oos_bars.values()))
+            if len(ref) >= 2:
+                n = min(len(rets), max(0, len(ref) - 1))
+                seg_ts = [ref[i + 1].timestamp for i in range(n)]
+                if first_ts is None and len(ref) > 0:
+                    first_ts = ref[0].timestamp
+                times.extend(seg_ts)
+        else:
+            # Synthetic / unit-test windows without stamps — keep equity path only.
+            pass
+
+    if first_ts is not None:
+        times = [first_ts] + times
+    # If lengths diverge (missing stamps), return empty times → year gate fails closed.
+    if len(times) != len(path):
+        return np.asarray(path, dtype=np.float64), np.asarray([], dtype=object)
+    return np.asarray(path, dtype=np.float64), np.asarray(times, dtype=object)
 
 
 @dataclass
@@ -168,6 +211,9 @@ class GateThresholds:
     min_sharpe: float = 0.0
     min_upi: float = 0.0
     min_cagr: float = 0.0
+    require_all_years_profitable: bool = False
+    min_year_return: float = 0.0
+    min_year_bars: int = 2
 
 
 @dataclass
@@ -175,26 +221,37 @@ class GateResult:
     passed: bool
     failures: List[str] = field(default_factory=list)
     metrics: Dict[str, float] = field(default_factory=dict)
+    calendar_year_returns: Dict[int, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "passed": self.passed,
             "failures": list(self.failures),
             "metrics": dict(self.metrics),
+            "calendar_year_returns": {
+                str(k): v for k, v in self.calendar_year_returns.items()
+            },
         }
 
 
 def evaluate_gates(
     metrics: Dict[str, float],
     thresholds: Optional[GateThresholds] = None,
+    *,
+    equity_curve: Optional[np.ndarray] = None,
+    equity_timestamps: Optional[np.ndarray] = None,
 ) -> GateResult:
     """
     Hard promotion gates on stitched OOS metrics.
 
     Requires positive Sharpe, UPI, CAGR and ``abs(max_drawdown) < max_dd_limit``.
+    Optionally requires every evaluable calendar year to be profitable.
     """
+    from engine.metrics import all_calendar_years_profitable
+
     thr = thresholds or GateThresholds()
     failures: List[str] = []
+    year_rets: Dict[int, float] = {}
     sharpe = float(metrics.get("sharpe_ratio", float("nan")))
     upi = float(metrics.get("ulcer_performance_index", float("nan")))
     cagr = float(metrics.get("cagr", float("nan")))
@@ -212,7 +269,25 @@ def evaluate_gates(
             f">= {thr.max_dd_limit}"
         )
 
-    return GateResult(passed=len(failures) == 0, failures=failures, metrics=dict(metrics))
+    if thr.require_all_years_profitable:
+        if equity_curve is None or equity_timestamps is None or len(equity_timestamps) == 0:
+            failures.append("calendar_year_gate_missing_timestamps")
+        else:
+            ok, year_rets, year_failures = all_calendar_years_profitable(
+                equity_curve,
+                equity_timestamps,
+                min_bars=thr.min_year_bars,
+                min_year_return=thr.min_year_return,
+            )
+            if not ok:
+                failures.extend(year_failures)
+
+    return GateResult(
+        passed=len(failures) == 0,
+        failures=failures,
+        metrics=dict(metrics),
+        calendar_year_returns=year_rets,
+    )
 
 
 @dataclass
@@ -222,6 +297,7 @@ class ModeValidationReport:
     stitched_equity: np.ndarray
     stitched_metrics: Dict[str, float]
     gates: GateResult
+    stitched_timestamps: Optional[np.ndarray] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -235,6 +311,9 @@ class ModeValidationReport:
             if len(self.stitched_equity)
             else None,
             "stitched_equity_n": int(len(self.stitched_equity)),
+            "calendar_year_returns": {
+                str(k): v for k, v in self.gates.calendar_year_returns.items()
+            },
         }
 
 
@@ -264,6 +343,11 @@ class WalkForwardValidator:
             oos_warmup_bars=int(
                 getattr(config.cl_validation, "oos_warmup_bars", 320)
             ),
+            require_all_years_profitable=bool(
+                self._thresholds.require_all_years_profitable
+            ),
+            min_year_return=float(self._thresholds.min_year_return),
+            min_year_bars=int(self._thresholds.min_year_bars),
         )
 
     def run_mode(
@@ -324,18 +408,24 @@ class WalkForwardValidator:
 
     def _finalize(self, mode: str, wfo: WFOResult) -> ModeValidationReport:
         cash = float(self._config.portfolio.initial_cash)
-        stitched = stitch_oos_equity(wfo.windows, cash)
+        stitched, stamps = stitch_oos_equity_timed(wfo.windows, cash)
         rf = float(getattr(self._config.backtest, "risk_free_rate", 0.0))
         metrics = (
             compute_metrics(stitched, risk_free_rate=rf)
             if len(stitched) >= 2
             else {}
         )
-        gates = evaluate_gates(metrics, self._thresholds)
+        gates = evaluate_gates(
+            metrics,
+            self._thresholds,
+            equity_curve=stitched,
+            equity_timestamps=stamps if len(stamps) else None,
+        )
         return ModeValidationReport(
             mode=mode,
             wfo=wfo,
             stitched_equity=stitched,
             stitched_metrics=metrics,
             gates=gates,
+            stitched_timestamps=stamps if len(stamps) else None,
         )

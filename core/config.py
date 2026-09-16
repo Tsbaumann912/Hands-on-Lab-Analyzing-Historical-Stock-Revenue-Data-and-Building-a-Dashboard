@@ -161,8 +161,8 @@ class CLValidationConfig:
     rolling_is_years: float = 5.0
     rolling_oos_years: float = 1.0
     purge_bars: int = 5
-    n_trials: int = 25
-    timeout_seconds: int = 120
+    n_trials: int = 40
+    timeout_seconds: int = 180
     max_dd_limit: float = 0.30
     min_sharpe: float = 0.0
     min_upi: float = 0.0
@@ -177,6 +177,11 @@ class CLValidationConfig:
     # Futures risk premia are usually evaluated vs 0 cash yield in the futures P&L.
     metrics_risk_free_rate: float = 0.0
     oos_warmup_bars: int = 320
+    # Re-optimisation: maximise CAGR (+ total-return blend) subject to yearly profits.
+    objective_metric: str = "cagr"
+    require_all_years_profitable: bool = True
+    min_year_return: float = 0.0
+    min_year_bars: int = 60
 
 
 @dataclass

@@ -211,12 +211,18 @@ class WalkForwardOptimizer:
         search_space: SearchSpace,
         objective_metric: str = "sharpe_ratio",
         oos_warmup_bars: int = 320,
+        require_all_years_profitable: bool = False,
+        min_year_return: float = 0.0,
+        min_year_bars: int = 2,
     ) -> None:
         self._config = config
         self._strategy_cls = strategy_cls
         self._search_space = search_space
         self._objective_metric = objective_metric
         self._oos_warmup_bars = max(0, int(oos_warmup_bars))
+        self._require_all_years_profitable = bool(require_all_years_profitable)
+        self._min_year_return = float(min_year_return)
+        self._min_year_bars = max(2, int(min_year_bars))
         self._engine = BacktestEngine(config, strategy_cls)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -354,10 +360,13 @@ class WalkForwardOptimizer:
 
         result = self._engine.run(combined, strategy_params=params)
         eq = np.asarray(result.equity_curve, dtype=np.float64)
+        ts = result.equity_timestamps
         if warm_n > 0 and len(eq) > warm_n:
             oos_eq = eq[warm_n:]
+            oos_ts = ts[warm_n:] if ts is not None and len(ts) == len(eq) else None
         else:
             oos_eq = eq
+            oos_ts = ts if ts is not None and len(ts) == len(eq) else None
 
         if len(oos_eq) >= 2:
             # Rebase to the configured starting cash so window metrics are
@@ -380,6 +389,7 @@ class WalkForwardOptimizer:
             trade_log=result.trade_log,
             fills=result.fills,
             config_snapshot=result.config_snapshot,
+            equity_timestamps=oos_ts,
         )
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -391,16 +401,48 @@ class WalkForwardOptimizer:
         timeout: Optional[int],
     ) -> tuple[Dict[str, Any], BacktestResult]:
         """Run an Optuna study on the IS window and return the best params."""
+        from engine.metrics import all_calendar_years_profitable
 
         def objective(trial: "optuna.Trial") -> float:  # type: ignore[name-defined]
             params = {k: fn(trial) for k, fn in self._search_space.items()}
             result = self._engine.run(is_bars, strategy_params=params)
-            return result.metrics.get(self._objective_metric, -999.0)
+            score = float(result.metrics.get(self._objective_metric, -999.0))
+            if not np.isfinite(score):
+                return -999.0
+            # Blend total return so Optuna prefers higher absolute profit when
+            # CAGR is similar across trials (same-length IS windows).
+            if self._objective_metric == "cagr":
+                total_ret = float(result.metrics.get("total_return", 0.0) or 0.0)
+                if np.isfinite(total_ret):
+                    score = score + 0.15 * total_ret
+            if self._require_all_years_profitable:
+                ts = result.equity_timestamps
+                if ts is None or len(ts) != len(result.equity_curve):
+                    return -999.0
+                ok, _, _ = all_calendar_years_profitable(
+                    result.equity_curve,
+                    ts,
+                    min_bars=self._min_year_bars,
+                    min_year_return=self._min_year_return,
+                )
+                if not ok:
+                    return -999.0
+            return score
 
         study = optuna.create_study(direction="maximize")  # type: ignore[union-attr]
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
 
-        best_params = study.best_params
+        # Prefer a feasible trial when the year-profit constraint rejected most runs.
+        feasible = [
+            t
+            for t in study.trials
+            if t.value is not None and np.isfinite(t.value) and float(t.value) > -998.0
+        ]
+        if feasible:
+            best_trial = max(feasible, key=lambda t: float(t.value))  # type: ignore[arg-type]
+            best_params = dict(best_trial.params)
+        else:
+            best_params = dict(study.best_params)
         best_result = self._engine.run(is_bars, strategy_params=best_params)
         return best_params, best_result
 

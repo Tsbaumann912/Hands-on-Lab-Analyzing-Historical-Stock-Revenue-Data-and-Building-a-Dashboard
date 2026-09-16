@@ -202,12 +202,18 @@ def run_validation(
         min_sharpe=float(v.min_sharpe),
         min_upi=float(v.min_upi),
         min_cagr=float(v.min_cagr),
+        require_all_years_profitable=bool(
+            getattr(v, "require_all_years_profitable", False)
+        ),
+        min_year_return=float(getattr(v, "min_year_return", 0.0)),
+        min_year_bars=int(getattr(v, "min_year_bars", 2)),
     )
+    objective = str(getattr(v, "objective_metric", "cagr") or "cagr")
     validator = WalkForwardValidator(
         cfg,
         _strategy_cls(strategy_name),
         search_space,
-        objective_metric="sharpe_ratio",
+        objective_metric=objective,
         thresholds=thresholds,
     )
 
@@ -258,12 +264,17 @@ def run_validation(
         "capital": float(v.capital),
         "start_date": v.start_date,
         "data": meta,
+        "objective_metric": str(getattr(v, "objective_metric", "cagr")),
         "risk": {
             "max_position_size_pct": float(cfg.risk.max_position_size_pct),
             "max_position_size_uncapped": float(cfg.risk.max_position_size_pct) <= 0.0,
             "max_dd_limit": float(v.max_dd_limit),
             "max_daily_drawdown_pct": float(cfg.risk.max_daily_drawdown_pct),
             "halt_on_breach": bool(cfg.risk.halt_on_breach),
+            "require_all_years_profitable": bool(
+                getattr(v, "require_all_years_profitable", False)
+            ),
+            "min_year_return": float(getattr(v, "min_year_return", 0.0)),
         },
         "overall_pass": overall_pass,
         "modes": {k: r.to_dict() for k, r in reports.items()},
@@ -288,6 +299,11 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         if risk.get("max_position_size_uncapped")
         else f"{size_pct:.0%} equity notional cap"
     )
+    year_gate = (
+        "required (every evaluable calendar year > 0)"
+        if risk.get("require_all_years_profitable")
+        else "not required"
+    )
     lines = [
         "# CL Walk-Forward Validation Report",
         "",
@@ -295,14 +311,22 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         f"- Capital: ${payload['capital']:,.0f}",
         f"- Start: {payload['start_date']}",
         f"- Data: {payload.get('data')}",
+        f"- Optuna objective: `{payload.get('objective_metric', 'sharpe_ratio')}`",
         f"- Position sizing: {size_note}",
         f"- System MaxDD gate: < {float(risk.get('max_dd_limit', 0.30)):.0%}",
+        f"- Calendar-year profitability: {year_gate}",
         f"- **Overall pass:** {payload['overall_pass']}",
         "",
     ]
     for mode, report in payload["modes"].items():
         gates = report["gates"]
         m = report.get("stitched_metrics") or {}
+        year_rets = report.get("calendar_year_returns") or gates.get(
+            "calendar_year_returns"
+        ) or {}
+        year_line = ", ".join(
+            f"{y}: {float(r):+.2%}" for y, r in sorted(year_rets.items(), key=lambda kv: int(kv[0]))
+        ) or "—"
         lines.extend(
             [
                 f"## {mode.title()} WFO",
@@ -313,8 +337,10 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
                 f"- Sharpe: {m.get('sharpe_ratio')}",
                 f"- UPI: {m.get('ulcer_performance_index')}",
                 f"- CAGR: {m.get('cagr')}",
+                f"- Total return: {m.get('total_return')}",
                 f"- Max DD: {m.get('max_drawdown')}",
                 f"- Final equity: {report.get('stitched_equity_final')}",
+                f"- Calendar-year returns: {year_line}",
                 "",
             ]
         )

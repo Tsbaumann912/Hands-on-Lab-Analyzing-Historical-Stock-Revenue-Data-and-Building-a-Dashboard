@@ -51,6 +51,7 @@ class BacktestResult:
     trade_log: List[TradeRecord]
     fills: List[Fill]
     config_snapshot: Dict[str, Any] = field(default_factory=dict)
+    equity_timestamps: Optional[np.ndarray] = None
 
     def summary(self) -> str:
         lines = ["── Backtest Result ─────────────────────────────"]
@@ -148,6 +149,7 @@ class BacktestEngine:
 
         eq_snapshots = portfolio.equity_curve
         eq_array = np.array([s.total_equity for s in eq_snapshots], dtype=np.float64)
+        ts_array = np.array([s.timestamp for s in eq_snapshots], dtype=object)
         metrics = compute_metrics(
             eq_array,
             risk_free_rate=float(getattr(self._config.backtest, "risk_free_rate", 0.05)),
@@ -159,6 +161,7 @@ class BacktestEngine:
             equity_curve=eq_array,
             trade_log=[],        # full trade reconstruction omitted for brevity
             fills=portfolio.fills,
+            equity_timestamps=ts_array,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
