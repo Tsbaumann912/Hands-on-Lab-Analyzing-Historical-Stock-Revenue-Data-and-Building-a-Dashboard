@@ -349,6 +349,19 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
         basis = np.log(np.clip(near, 1e-12, None)) - np.log(np.clip(nxt, 1e-12, None))
         gs_ratio = np.log(np.clip(gold, 1e-12, None)) - np.log(np.clip(close, 1e-12, None))
 
+    from silver_ensemble.indicators import sma, stochastic_rsi, wilder_rsi
+
+    ens = config.ensemble
+    ma_fast = sma(close, ens.ma_fast)
+    ma_slow = sma(close, ens.ma_slow)
+    rsi = wilder_rsi(close, ens.rsi_period)
+    stoch_rsi = stochastic_rsi(
+        close,
+        rsi_period=ens.rsi_period,
+        stoch_period=ens.stoch_rsi_period,
+        smooth_k=ens.stoch_rsi_smooth,
+    )
+
     return {
         "close": close,
         "high": high,
@@ -365,4 +378,8 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
         "carry": carry,
         "basis": basis,
         "gs_ratio": gs_ratio,
+        "ma_fast": ma_fast,
+        "ma_slow": ma_slow,
+        "rsi": rsi,
+        "stoch_rsi": stoch_rsi,
     }

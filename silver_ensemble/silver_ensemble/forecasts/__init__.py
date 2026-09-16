@@ -1,4 +1,4 @@
-"""Five silver forecast sleeves (A–E), vectorised."""
+"""Six silver forecast sleeves (A–F), vectorised."""
 
 from __future__ import annotations
 
@@ -129,27 +129,23 @@ def forecast_gs_ratio_real_yield_fade(
     z_ratio = _zscore(gs_ratio, cfg.ratio_lookback)
     out = np.zeros(n, dtype=np.float64)
 
-    # Ratio sleeve: high GS ratio (gold rich / silver cheap) → long silver
     ratio_long = z_ratio > cfg.fade_z
     ratio_short = z_ratio < -cfg.fade_z
     out = np.where(ratio_long, 10.0, out)
     out = np.where(ratio_short, -10.0, out)
 
-    # Macro fade: stretched SI with rising real yields AND rising USD → fade
     bear_macro = (real_yield_chg > 0.0) & (usd_ret_20d > 0.0)
     bull_macro = (real_yield_chg < 0.0) & (usd_ret_20d < 0.0)
     fade_short = (z_px > cfg.fade_z) & bear_macro
     fade_long = (z_px < -cfg.fade_z) & bull_macro
-    # Fade overrides ratio when both fire in opposite directions by averaging signs
     out = np.where(fade_short, -10.0, out)
     out = np.where(fade_long, 10.0, out)
 
-    # Hard gate: structural TSMOM 252d aligned with inventory tightness → disable fade/ratio
     r252 = _rolling_sum(returns, 252)
     inv_mu = _rolling_mean(inventory, cfg.inventory_sma)
     inv_sd = _rolling_std(inventory, cfg.inventory_sma)
     with np.errstate(divide="ignore", invalid="ignore"):
-        z_inv = -(inventory - inv_mu) / inv_sd  # high => tightness
+        z_inv = -(inventory - inv_mu) / inv_sd
     structural = (
         (~np.isnan(r252))
         & (~np.isnan(z_inv))
@@ -162,8 +158,38 @@ def forecast_gs_ratio_real_yield_fade(
     return _clip(out, cfg.forecast_cap)
 
 
+def forecast_stoch_ma(
+    ma_fast: np.ndarray,
+    ma_slow: np.ndarray,
+    stoch_rsi: np.ndarray,
+    cfg: EnsembleConfig,
+) -> np.ndarray:
+    """
+    F: Fast/Slow MA trend with Stochastic RSI pullback confirmation.
+
+    Long when fast MA > slow MA and StochRSI is oversold (or ≤ 0.5);
+    short when fast MA < slow MA and StochRSI is overbought (or ≥ 0.5).
+    Stronger (±15) at StochRSI extremes; milder (±7.5) otherwise in-trend.
+    """
+    trend = np.sign(ma_fast - ma_slow)
+    valid = np.isfinite(ma_fast) & np.isfinite(ma_slow) & np.isfinite(stoch_rsi) & (trend != 0)
+
+    strong_long = (trend > 0) & (stoch_rsi <= cfg.stoch_oversold)
+    strong_short = (trend < 0) & (stoch_rsi >= cfg.stoch_overbought)
+    soft_long = (trend > 0) & (stoch_rsi <= 0.5) & ~strong_long
+    soft_short = (trend < 0) & (stoch_rsi >= 0.5) & ~strong_short
+
+    out = np.zeros(ma_fast.shape[0], dtype=np.float64)
+    out = np.where(strong_long, 15.0, out)
+    out = np.where(strong_short, -15.0, out)
+    out = np.where(soft_long, 7.5, out)
+    out = np.where(soft_short, -7.5, out)
+    out = np.where(valid, out, np.nan)
+    return _clip(out, cfg.forecast_cap)
+
+
 def compute_all_forecasts(features: Dict[str, np.ndarray], cfg: EnsembleConfig) -> Dict[str, np.ndarray]:
-    """Run all five sleeves; keys match config weight names."""
+    """Run all sleeves; keys match config weight names."""
     tsmom = forecast_tsmom(features["returns"], cfg)
     inventory = forecast_inventory_trend(features["returns"], features["inventory"], cfg)
     fade = forecast_gs_ratio_real_yield_fade(
@@ -175,7 +201,6 @@ def compute_all_forecasts(features: Dict[str, np.ndarray], cfg: EnsembleConfig) 
         features["real_yield_chg"],
         cfg,
     )
-    # Extra hard gate: when trend + inventory *forecasts* agree, never fade
     aligned = (
         (np.sign(tsmom) == np.sign(inventory))
         & (np.abs(tsmom) > 5.0)
@@ -184,10 +209,17 @@ def compute_all_forecasts(features: Dict[str, np.ndarray], cfg: EnsembleConfig) 
         & np.isfinite(inventory)
     )
     fade = np.where(aligned, 0.0, fade)
+    stoch_ma = forecast_stoch_ma(
+        features["ma_fast"],
+        features["ma_slow"],
+        features["stoch_rsi"],
+        cfg,
+    )
     return {
         "tsmom": tsmom,
         "carry": forecast_carry(features["carry"], cfg),
         "basis_mom": forecast_basis_momentum(features["basis"], cfg),
         "inventory": inventory,
         "fade": fade,
+        "stoch_ma": stoch_ma,
     }

@@ -8,7 +8,7 @@ import numpy as np
 
 from silver_ensemble.models import EnsembleConfig
 
-SLEEVE_ORDER = ("tsmom", "carry", "basis_mom", "inventory", "fade")
+SLEEVE_ORDER = ("tsmom", "carry", "basis_mom", "inventory", "fade", "stoch_ma")
 
 
 def _weight_vector(weights: Mapping[str, float]) -> np.ndarray:

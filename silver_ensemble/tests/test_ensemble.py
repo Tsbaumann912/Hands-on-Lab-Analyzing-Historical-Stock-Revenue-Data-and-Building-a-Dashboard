@@ -42,6 +42,8 @@ def test_no_quantterminal_import() -> None:
         "silver_ensemble.engine",
         "silver_ensemble.validation",
         "silver_ensemble.cli",
+        "silver_ensemble.indicators",
+        "silver_ensemble.optimize",
     ]
     for m in mods:
         mod = importlib.import_module(m)
@@ -57,9 +59,12 @@ def test_config_loads() -> None:
     assert 126 in cfg.ensemble.horizons_days
     assert cfg.portfolio.initial_cash == 350_000_000.0
     assert cfg.risk.max_contracts == 2500
+    assert cfg.risk.max_position_size_pct == 0.05
     assert cfg.validation.max_drawdown_gate == 0.30
     assert cfg.backtest.data_start == "2008-01-01"
     assert cfg.backtest.is_years == 3
+    assert "stoch_ma" in cfg.ensemble.weights
+    assert cfg.ensemble.ma_fast < cfg.ensemble.ma_slow
 
 
 def test_tsmom_signs_on_trending_series() -> None:
@@ -78,6 +83,7 @@ def test_disagreement_flattens() -> None:
         "basis_mom": np.full(n, 10.0),
         "inventory": np.full(n, -10.0),
         "fade": np.full(n, 10.0),
+        "stoch_ma": np.full(n, -10.0),
     }
     f_star, agreement, _, _ = blend_forecasts(forecasts, cfg.ensemble)
     assert float(np.nanmean(agreement)) < cfg.ensemble.agreement_min + 0.05
@@ -85,7 +91,7 @@ def test_disagreement_flattens() -> None:
 
 
 def test_agreement_perfect() -> None:
-    mat = np.ones((10, 5)) * 10.0
+    mat = np.ones((10, 6)) * 10.0
     a = agreement_ratio(mat)
     assert np.allclose(a, 1.0)
 
@@ -97,8 +103,13 @@ def test_feature_matrix_has_gs_ratio() -> None:
     assert "gs_ratio" in feats
     assert "real_yield_chg" in feats
     assert "gold_close" in feats
+    assert "ma_fast" in feats
+    assert "ma_slow" in feats
+    assert "stoch_rsi" in feats
+    assert "rsi" in feats
     assert feats["gs_ratio"].shape[0] == len(bars)
     assert np.isfinite(feats["gs_ratio"][50:]).any()
+    assert np.isfinite(feats["stoch_rsi"][80:]).any()
 
 
 def test_backtest_synthetic_runs() -> None:
@@ -247,17 +258,31 @@ def test_calendar_year_returns_and_optimize_apply() -> None:
     assert abs(mean_calendar_year_return(bars, res.equity_curve) - float(np.mean(list(yrs.values())))) < 1e-12
 
     params = {
-        "w_tsmom": 0.4,
-        "w_carry": 0.2,
-        "w_basis_mom": 0.15,
+        "w_tsmom": 0.3,
+        "w_carry": 0.15,
+        "w_basis_mom": 0.1,
         "w_inventory": 0.15,
-        "w_fade": 0.10,
+        "w_fade": 0.1,
+        "w_stoch_ma": 0.2,
         "vol_target_annual": 0.08,
         "kelly_fraction": 0.25,
     }
     cfg2 = apply_trial_params(cfg, params)
     assert abs(sum(cfg2.ensemble.weights.values()) - 1.0) < 1e-9
     assert cfg2.ensemble.vol_target_annual == 0.08
+    assert cfg2.risk.max_position_size_pct == 0.05
     ev = evaluate_config(cfg2, bars)
     assert "avg_calendar_year_return" in ev
     assert ev["max_drawdown"] >= 0.0
+
+
+def test_stoch_ma_sleeve_signs() -> None:
+    from silver_ensemble.forecasts import forecast_stoch_ma
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    n = 200
+    ma_fast = np.linspace(20.0, 30.0, n)  # rising above slow
+    ma_slow = np.full(n, 22.0)
+    stoch = np.full(n, 0.15)  # oversold
+    f = forecast_stoch_ma(ma_fast, ma_slow, stoch, cfg.ensemble)
+    assert np.nanmean(f[50:]) > 5.0

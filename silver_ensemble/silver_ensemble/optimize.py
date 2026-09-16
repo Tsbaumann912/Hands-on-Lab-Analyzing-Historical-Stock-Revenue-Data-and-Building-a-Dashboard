@@ -16,7 +16,7 @@ from silver_ensemble.models import Bar, Config, EnsembleConfig, RiskConfig, load
 
 logger = logging.getLogger(__name__)
 
-SLEEVE_KEYS = ("tsmom", "carry", "basis_mom", "inventory", "fade")
+SLEEVE_KEYS = ("tsmom", "carry", "basis_mom", "inventory", "fade", "stoch_ma")
 
 
 def apply_trial_params(base: Config, params: Mapping[str, Any]) -> Config:
@@ -43,14 +43,18 @@ def apply_trial_params(base: Config, params: Mapping[str, Any]) -> Config:
             params.get("take_profit_atr_mult", base.ensemble.take_profit_atr_mult)
         ),
         fdm_cap=float(params.get("fdm_cap", base.ensemble.fdm_cap)),
+        ma_fast=int(params.get("ma_fast", base.ensemble.ma_fast)),
+        ma_slow=int(params.get("ma_slow", base.ensemble.ma_slow)),
+        rsi_period=int(params.get("rsi_period", base.ensemble.rsi_period)),
+        stoch_rsi_period=int(params.get("stoch_rsi_period", base.ensemble.stoch_rsi_period)),
+        stoch_oversold=float(params.get("stoch_oversold", base.ensemble.stoch_oversold)),
+        stoch_overbought=float(params.get("stoch_overbought", base.ensemble.stoch_overbought)),
     )
     risk = replace(
         base.risk,
-        max_position_size_pct=float(
-            params.get("max_position_size_pct", base.risk.max_position_size_pct)
-        ),
+        # Position size is fixed at config value (5% / 0.05) — not searched
+        max_position_size_pct=float(base.risk.max_position_size_pct),
         max_leverage=float(params.get("max_leverage", base.risk.max_leverage)),
-        # Halt slightly inside the 30% gate so max DD stays strictly below 0.30
         max_daily_drawdown_pct=float(
             params.get("max_daily_drawdown_pct", min(0.29, base.risk.max_daily_drawdown_pct))
         ),
@@ -249,12 +253,19 @@ def write_optimized_yaml(
         "stop_atr_mult",
         "take_profit_atr_mult",
         "fdm_cap",
+        "stoch_oversold",
+        "stoch_overbought",
     ):
         if key in best_params:
             ens[key] = float(best_params[key])
-    for key in ("max_position_size_pct", "max_leverage", "max_daily_drawdown_pct"):
+    for key in ("ma_fast", "ma_slow", "rsi_period", "stoch_rsi_period", "stoch_rsi_smooth"):
+        if key in best_params:
+            ens[key] = int(best_params[key])
+    for key in ("max_leverage", "max_daily_drawdown_pct"):
         if key in best_params:
             risk[key] = float(best_params[key])
+    # Fixed by request: 5% of equity
+    risk["max_position_size_pct"] = 0.05
     # Keep halt inside 30% gate
     risk["max_daily_drawdown_pct"] = min(float(risk.get("max_daily_drawdown_pct", 0.29)), 0.29)
     risk["halt_on_breach"] = True

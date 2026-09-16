@@ -86,6 +86,14 @@ class EnsembleConfig:
     atr_period: int
     stop_atr_mult: float
     take_profit_atr_mult: float
+    # StochRSI + MA sleeve
+    rsi_period: int
+    stoch_rsi_period: int
+    stoch_rsi_smooth: int
+    ma_fast: int
+    ma_slow: int
+    stoch_oversold: float
+    stoch_overbought: float
 
 
 @dataclass(frozen=True)
@@ -187,6 +195,13 @@ def load_config(path: str | Path | None = None) -> Config:
             atr_period=int(e["atr_period"]),
             stop_atr_mult=float(e["stop_atr_mult"]),
             take_profit_atr_mult=float(e["take_profit_atr_mult"]),
+            rsi_period=int(e.get("rsi_period", 14)),
+            stoch_rsi_period=int(e.get("stoch_rsi_period", 14)),
+            stoch_rsi_smooth=int(e.get("stoch_rsi_smooth", 3)),
+            ma_fast=int(e.get("ma_fast", 10)),
+            ma_slow=int(e.get("ma_slow", 40)),
+            stoch_oversold=float(e.get("stoch_oversold", 0.20)),
+            stoch_overbought=float(e.get("stoch_overbought", 0.80)),
         ),
         risk=RiskConfig(
             max_daily_drawdown_pct=float(r["max_daily_drawdown_pct"]),

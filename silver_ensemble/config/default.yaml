@@ -1,71 +1,95 @@
-# Standalone COMEX Silver (SI) ensemble CTA — independent of QuantTerminal.
 contract:
   symbol: SI
   name: Silver
   yfinance_ticker: SI=F
   multiplier: 5000.0
   tick_size: 0.005
-  tick_value: 25.00
+  tick_value: 25.0
   commission_per_contract: 2.25
   slippage_ticks: 1
-
 ensemble:
-  horizons_days: [21, 63, 126, 252]
-  # Optuna-tuned weights (maximize avg calendar-year return, max DD < 30%)
+  horizons_days:
+  - 21
+  - 63
+  - 126
+  - 252
   weights:
-    tsmom: 0.266
-    carry: 0.227
+    tsmom: 0.281
+    carry: 0.072
     basis_mom: 0.111
-    inventory: 0.250
-    fade: 0.146
+    inventory: 0.322
+    fade: 0.036
+    stoch_ma: 0.178
   forecast_cap: 20.0
-  agreement_min: 0.376
-  fdm_cap: 1.801
-  vol_target_annual: 0.093
+  agreement_min: 0.446
+  fdm_cap: 1.623
+  vol_target_annual: 0.059
   ewma_vol_com_days: 60
-  fade_z: 2.554
-  buffer_forecast: 3.402
-  kelly_fraction: 0.246
+  fade_z: 2.836
+  buffer_forecast: 4.807
+  kelly_fraction: 0.369
   inventory_sma: 60
   inventory_delta_days: 20
   basis_mom_lookback: 63
   price_z_lookback: 20
   ratio_lookback: 63
   atr_period: 14
-  stop_atr_mult: 2.382
-  take_profit_atr_mult: 5.434
-
+  stop_atr_mult: 2.515
+  take_profit_atr_mult: 5.592
+  rsi_period: 12
+  stoch_rsi_period: 10
+  stoch_rsi_smooth: 3
+  ma_fast: 15
+  ma_slow: 71
+  stoch_oversold: 0.281
+  stoch_overbought: 0.784
 risk:
   max_daily_drawdown_pct: 0.29
-  max_position_size_pct: 0.396
-  max_leverage: 2.821
+  max_position_size_pct: 0.05
+  max_leverage: 2.088
   max_contracts: 2500
   halt_on_breach: true
-
 portfolio:
-  # Institutional validation account ($350M AUM).
   initial_cash: 350000000.0
-
 backtest:
-  data_start: "2008-01-01"
+  data_start: '2008-01-01'
   is_years: 3
   oos_years: 1
   step_years: 1
   purge_bars: 5
   walk_forward_windows: 4
-  in_sample_ratio: 0.70
-
+  in_sample_ratio: 0.7
 validation:
   dsr_pass_threshold: 0.95
-  oos_retention_min: 0.60
-  max_drawdown_gate: 0.30
+  oos_retention_min: 0.6
+  max_drawdown_gate: 0.3
   min_oos_sharpe: 0.0
   min_oos_cagr: 0.0
   min_oos_upi: 0.0
   require_both_modes: true
-
 optimization:
   objective: maximize_avg_calendar_year_return
   constraint: max_drawdown < 0.30
-  n_trials: 80
-  search_space: config/optuna.yaml
+  applied_params:
+    vol_target_annual: 0.05856203507805325
+    kelly_fraction: 0.36855542218675974
+    agreement_min: 0.4461554864498036
+    buffer_forecast: 4.806698771074186
+    fade_z: 2.835922812053061
+    stop_atr_mult: 2.5154114967756263
+    take_profit_atr_mult: 5.591853918227708
+    fdm_cap: 1.6232802919992873
+    ma_fast: 15.0
+    ma_slow: 71.0
+    rsi_period: 12.0
+    stoch_rsi_period: 10.0
+    stoch_oversold: 0.2805499539809553
+    stoch_overbought: 0.7841689963360206
+    max_leverage: 2.0884964493792033
+    weights:
+      tsmom: 0.2820001560794683
+      carry: 0.07224570063598162
+      basis_mom: 0.11071262948391374
+      inventory: 0.32175908220934646
+      fade: 0.035574083328695015
+      stoch_ma: 0.17770834826259474
