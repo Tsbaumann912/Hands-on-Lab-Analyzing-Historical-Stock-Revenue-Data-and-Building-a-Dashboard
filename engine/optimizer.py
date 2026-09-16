@@ -40,6 +40,31 @@ STRATEGY_PARAM_SPACES: Dict[str, List[str]] = {
     ],
     "MomentumBreakout": ["lookback", "atr_period"],
     "TrendFollowingMACD": ["atr_period", "sma_short", "sma_long"],
+    "CLCarryCurve": [
+        "carry_back_month",
+        "carry_basis_lookback",
+        "carry_strength_atr_mult",
+        "atr_period",
+    ],
+    "CLCarryMomentum": [
+        "carry_back_month",
+        "carry_mom_lookback",
+        "carry_mom_z_max",
+        "atr_period",
+    ],
+    "CLVolTargetTSMOM": [
+        "tsmom_horizon_short",
+        "tsmom_horizon_med",
+        "tsmom_horizon_long",
+        "vol_target_annual",
+        "reaction_b",
+    ],
+    "CLInventoryConfirm": [
+        "carry_back_month",
+        "inventory_sma",
+        "inventory_expect_window",
+        "atr_period",
+    ],
 }
 
 

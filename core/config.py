@@ -46,6 +46,24 @@ class StrategyConfig:
     exit_z_score: float = 0.5
     lookback: int = 50
     signal_strength_scaling: bool = True
+    # ── CL / energy risk-premia knobs (docs/CL_RESEARCH.md) ─────────────────
+    carry_back_month: int = 3
+    carry_basis_lookback: int = 63
+    carry_strength_atr_mult: float = 1.0
+    carry_mom_lookback: int = 10
+    carry_mom_z_max: float = 2.0
+    tsmom_horizon_short: int = 20
+    tsmom_horizon_med: int = 60
+    tsmom_horizon_long: int = 120
+    tsmom_z_cap: float = 3.0
+    vol_target_annual: float = 0.12
+    ewma_vol_com: float = 60.0
+    reaction_b: float = 1.0
+    vol_target_leverage_cap: float = 2.0
+    inventory_enabled: bool = True
+    inventory_sma: int = 60
+    inventory_expect_window: int = 8
+    inventory_confirm_scale: bool = True
 
 
 @dataclass
