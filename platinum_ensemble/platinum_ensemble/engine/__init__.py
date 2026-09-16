@@ -145,7 +145,8 @@ class BacktestEngine:
             if sig.direction == Direction.LONG:
                 target = float(sig.suggested_size or 0.0)
             elif sig.direction == Direction.SHORT:
-                target = -float(sig.suggested_size or 0.0)
+                short_scale = float(getattr(self.config.ensemble, "short_scale", 1.0))
+                target = -float(sig.suggested_size or 0.0) * max(0.0, min(1.0, short_scale))
 
             delta = target - position
             if abs(delta) >= 1.0:

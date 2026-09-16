@@ -73,7 +73,11 @@ def test_pl_gc_rv_buys_cheap_platinum() -> None:
 
 
 def test_disagreement_flattens() -> None:
+    from dataclasses import replace
+
     cfg = load_config(ROOT / "config" / "default.yaml")
+    # Pin agreement_min so the test is independent of re-optimised YAML locks.
+    ens = replace(cfg.ensemble, agreement_min=0.55)
     n = 50
     forecasts = {
         "tsmom": np.full(n, 10.0),
@@ -82,8 +86,8 @@ def test_disagreement_flattens() -> None:
         "inventory": np.full(n, -10.0),
         "fade": np.full(n, 10.0),
     }
-    f_star, agreement, _, _ = blend_forecasts(forecasts, cfg.ensemble)
-    assert float(np.nanmean(agreement)) < cfg.ensemble.agreement_min + 0.05
+    f_star, agreement, _, _ = blend_forecasts(forecasts, ens)
+    assert float(np.nanmean(agreement)) < ens.agreement_min + 0.05
     assert float(np.nanmean(np.abs(f_star))) < 1.0
 
 
@@ -235,3 +239,49 @@ def test_institutional_wfo_uses_350m() -> None:
     assert "cagr" in report.rolling.stitched_metrics
     assert report.anchored.mode == "anchored"
     assert report.rolling.mode == "rolling"
+
+
+def test_calendar_year_returns() -> None:
+    from datetime import datetime, timezone
+
+    from platinum_ensemble.optimize import calendar_year_returns
+
+    # Two years: +10% then -5%
+    equity = np.array([100.0, 105.0, 110.0, 108.0, 104.5], dtype=np.float64)
+    ts = [
+        datetime(2018, 1, 1, tzinfo=timezone.utc),
+        datetime(2018, 6, 1, tzinfo=timezone.utc),
+        datetime(2018, 12, 31, tzinfo=timezone.utc),
+        datetime(2019, 6, 1, tzinfo=timezone.utc),
+        datetime(2019, 12, 31, tzinfo=timezone.utc),
+    ]
+    cal = calendar_year_returns(equity, ts)
+    assert cal.n_years == 2
+    assert cal.years[2018] == pytest.approx(0.10, abs=1e-9)
+    assert cal.years[2019] == pytest.approx(104.5 / 108.0 - 1.0, abs=1e-9)
+
+
+def test_optimize_synthetic_improves_under_dd_cap() -> None:
+    from dataclasses import replace as dc_replace
+    from datetime import datetime, timedelta, timezone
+
+    from platinum_ensemble.optimize import apply_trial_params, run_calendar_optimize
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_pl(2800, seed=21), "PL")
+    base = datetime(2010, 1, 4, tzinfo=timezone.utc)
+    shifted = [
+        dc_replace(b, timestamp=base + timedelta(days=i)) for i, b in enumerate(bars)
+    ]
+    result = run_calendar_optimize(
+        cfg,
+        shifted,
+        optuna_path=ROOT / "config" / "optuna.yaml",
+        n_trials=8,
+        max_dd_limit=0.30,
+    )
+    assert result.n_trials == 8
+    assert abs(sum(result.best_weights.values()) - 1.0) < 1e-6
+    assert "vol_target_annual" in result.best_params
+    cfg2 = apply_trial_params(cfg, result.best_params)
+    assert cfg2.risk.halt_on_breach is False

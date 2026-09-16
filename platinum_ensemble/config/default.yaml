@@ -1,65 +1,62 @@
-# Standalone NYMEX Platinum (PL) ensemble CTA — independent of QuantTerminal.
 contract:
   symbol: PL
   name: Platinum
   yfinance_ticker: PL=F
-  multiplier: 50.0          # 50 troy ounces
-  tick_size: 0.10           # $0.10 / oz
-  tick_value: 5.00          # $5 per tick
+  multiplier: 50.0
+  tick_size: 0.1
+  tick_value: 5.0
   commission_per_contract: 2.25
-  slippage_ticks: 2         # wider than GC — thinner PL liquidity
-
+  slippage_ticks: 2
 ensemble:
-  horizons_days: [21, 63, 252]
+  horizons_days:
+  - 21
+  - 63
+  - 252
   weights:
-    tsmom: 0.30
-    carry: 0.20
-    pl_gc_rv: 0.25
-    inventory: 0.15
-    fade: 0.10
+    tsmom: 0.0
+    carry: 0.0
+    pl_gc_rv: 0.0
+    inventory: 0.391087
+    fade: 0.608913
   forecast_cap: 20.0
-  agreement_min: 0.40
-  fdm_cap: 2.5
-  vol_target_annual: 0.12
+  agreement_min: 0.02876
+  fdm_cap: 2.452827
+  vol_target_annual: 0.240823
   ewma_vol_com_days: 60
-  fade_z: 2.0
-  buffer_forecast: 2.0
-  kelly_fraction: 0.35
+  fade_z: 1.26929
+  buffer_forecast: 5.085171
+  kelly_fraction: 0.49039
   inventory_sma: 60
   inventory_delta_days: 20
   rv_lookback: 63
-  rv_entry_z: 1.5
+  rv_entry_z: 1.641336
   price_z_lookback: 20
   atr_period: 14
-  stop_atr_mult: 2.0
+  stop_atr_mult: 2.375191
   take_profit_atr_mult: 4.0
   gold_ticker: GC=F
-
+  short_scale: 0.0
 risk:
   max_daily_drawdown_pct: 0.03
-  max_position_size_pct: 0.50
-  max_leverage: 5.0
-  max_contracts: 10000      # institutional sizing for $350M vol-targeting
+  max_position_size_pct: 0.298229
+  max_leverage: 4.400507
+  max_contracts: 10000
   halt_on_breach: true
-
 portfolio:
-  # Institutional validation book ($350M).
   initial_cash: 350000000.0
-
 backtest:
   walk_forward_windows: 4
-  in_sample_ratio: 0.70
+  in_sample_ratio: 0.7
   purge_bars: 5
-  anchored_initial_is_bars: 756   # ~3y
-  oos_bars: 252                   # ~1y
+  anchored_initial_is_bars: 756
+  oos_bars: 252
   rolling_is_bars: 756
   rolling_step_bars: 252
-
 validation:
   dsr_pass_threshold: 0.95
-  oos_retention_min: 0.60
-  max_oos_drawdown: 0.30
+  oos_retention_min: 0.6
+  max_oos_drawdown: 0.3
   min_oos_sharpe: 0.0
   min_oos_cagr: 0.0
   min_oos_upi: 0.0
-  data_start: "2008-01-01"
+  data_start: '2008-01-01'

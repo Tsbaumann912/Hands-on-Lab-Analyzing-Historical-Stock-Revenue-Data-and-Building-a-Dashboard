@@ -87,6 +87,7 @@ class EnsembleConfig:
     stop_atr_mult: float
     take_profit_atr_mult: float
     gold_ticker: str
+    short_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,7 @@ def load_config(path: str | Path | None = None) -> Config:
             stop_atr_mult=float(e["stop_atr_mult"]),
             take_profit_atr_mult=float(e["take_profit_atr_mult"]),
             gold_ticker=str(e.get("gold_ticker", "GC=F")),
+            short_scale=float(e.get("short_scale", 1.0)),
         ),
         risk=RiskConfig(
             max_daily_drawdown_pct=float(r["max_daily_drawdown_pct"]),

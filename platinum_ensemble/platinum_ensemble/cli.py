@@ -17,7 +17,11 @@ from platinum_ensemble.validation import (
     run_institutional_wfo,
     validate_ensemble,
 )
-
+from platinum_ensemble.optimize import (
+    optimize_result_to_dict,
+    run_calendar_optimize,
+    write_optimized_yaml,
+)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("platinum_ensemble")
 
@@ -118,6 +122,52 @@ def cmd_wfo(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def cmd_optimize(args: argparse.Namespace) -> int:
+    """Re-optimise for mean calendar-year return with Max DD < 30%."""
+    cfg = load_config(args.config)
+    start = args.start or cfg.validation.data_start
+    if args.cash is not None:
+        cfg = replace(cfg, portfolio=replace(cfg.portfolio, initial_cash=float(args.cash)))
+
+    if args.synthetic:
+        df = make_synthetic_pl(n_days=args.days, seed=args.seed)
+    else:
+        df = load_yfinance_pl(
+            cfg.contract.yfinance_ticker,
+            gold_ticker=cfg.ensemble.gold_ticker,
+            start=start,
+            end=args.end,
+        )
+    bars = dataframe_to_bars(df, symbol=cfg.contract.symbol)
+    optuna_path = args.optuna or str(Path(args.config).resolve().parent / "optuna.yaml")
+    result = run_calendar_optimize(
+        cfg,
+        bars,
+        optuna_path=optuna_path,
+        n_trials=args.trials,
+        max_dd_limit=args.max_dd,
+    )
+    payload = optimize_result_to_dict(result)
+    print(json.dumps(payload, indent=2))
+
+    if args.write_config:
+        out = Path(args.write_config)
+        write_optimized_yaml(Path(args.config), result, out)
+        logger.info("Wrote optimised config → %s", out)
+
+    logger.info(
+        "optimize mean_yr_IS=%.2f%% maxDD_IS=%.2f%% | mean_yr_OOS=%.2f%% maxDD_OOS=%.2f%% | full mean_yr=%.2f%% maxDD=%.2f%%",
+        100.0 * result.is_calendar.mean_return,
+        100.0 * float(result.is_metrics.get("max_drawdown", 0.0)),
+        100.0 * result.oos_calendar.mean_return,
+        100.0 * float(result.oos_metrics.get("max_drawdown", 0.0)),
+        100.0 * result.full_calendar.mean_return,
+        100.0 * float(result.full_metrics.get("max_drawdown", 0.0)),
+    )
+    full_ok = float(result.full_metrics.get("max_drawdown", 1.0)) < args.max_dd
+    return 0 if full_ok and result.full_calendar.mean_return > 0 else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="platinum_ensemble", description="Standalone PL platinum ensemble CTA")
     p.add_argument(
@@ -159,6 +209,26 @@ def build_parser() -> argparse.ArgumentParser:
     wfo.add_argument("--end", default=None)
     wfo.add_argument("--cash", type=float, default=None, help="Account size (default 350e6 from config)")
     wfo.set_defaults(func=cmd_wfo)
+
+    opt = sub.add_parser(
+        "optimize",
+        help="Re-optimise for mean calendar-year return with Max DD < 30%",
+    )
+    opt.add_argument("--synthetic", action="store_true")
+    opt.add_argument("--days", type=int, default=2500)
+    opt.add_argument("--seed", type=int, default=42)
+    opt.add_argument("--start", default=None)
+    opt.add_argument("--end", default=None)
+    opt.add_argument("--cash", type=float, default=None)
+    opt.add_argument("--trials", type=int, default=None)
+    opt.add_argument("--max-dd", type=float, default=0.30)
+    opt.add_argument("--optuna", default=None, help="Path to optuna.yaml")
+    opt.add_argument(
+        "--write-config",
+        default=None,
+        help="Write best params into this YAML path (e.g. config/default.yaml)",
+    )
+    opt.set_defaults(func=cmd_optimize)
     return p
 
 
