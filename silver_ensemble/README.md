@@ -65,5 +65,6 @@ silver_ensemble/
 - Warm-up returns flat / NaN forecasts — never raises on short history.
 - Default account size for institutional WFO: **$350,000,000**; gate max DD **< 30%**.
 - CLI: `validate-wfo --start 2008-01-01` runs anchored + rolling walk-forward.
-- CLI: `optimize --start 2008-01-01` maximizes average calendar-year return under the DD gate.
+- CLI: `optimize` maximizes annual + total return with **every calendar year > 0** and max DD < 30%.
+- Collateral yield on futures equity + YTD loss halt enforce calendar-year floors.
 - Position sizing: **uncapped** `max_position_size_pct` (leverage / contracts / vol-target bind).
