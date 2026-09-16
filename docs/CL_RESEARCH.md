@@ -56,6 +56,42 @@ Yahoo path). Production carry requires real F1–Fn. Inventory uses an optional
 injected series or a price-implied proxy when EIA is unavailable — never fabricated
 “surprises” labelled as official EIA.
 
+## Anchored + rolling walk-forward (promotion)
+
+Run both modes on daily `CL=F` from **2008-01-01** with account size **$350M**:
+
+```bash
+python3 scripts/validate_cl_wfo.py \
+  --strategy CLCarryMomentum \
+  --start 2008-01-01 \
+  --capital 350000000 \
+  --modes anchored,rolling \
+  --trials 25
+```
+
+| Mode | IS | OOS | Notes |
+|------|----|-----|-------|
+| **Anchored** | Expanding from 2008, min 3y | 1y steps | Start date fixed |
+| **Rolling** | Fixed 5y | 1y, slide 1y | `purge_bars=5` embargo |
+
+**Ulcer metrics** (in `engine/metrics.py`):
+
+\[
+\mathrm{UI}=\sqrt{\mathrm{mean}(D_t^2)},\quad
+\mathrm{UPI}=\mathrm{CAGR}/(\mathrm{UI}+\varepsilon)
+\]
+
+where \(D_t\) is percentage drawdown from peak equity.
+
+**Hard OOS gates** (stitched OOS equity, both modes must pass):
+
+- `sharpe_ratio > 0`
+- `ulcer_performance_index > 0`
+- `cagr > 0`
+- `abs(max_drawdown) < 0.30`
+
+Config: `cl_validation` in `config/default.yaml`. Report: `docs/CL_WFO_REPORT.md`.
+
 ## Sources
 
 - Gorton, Hayashi, Rouwenhorst — *Fundamentals of Commodity Futures Returns* (NBER w13249)
@@ -64,3 +100,4 @@ injected series or a price-implied proxy when EIA is unavailable — never fabri
 - Rebellion Research — Systematic Energy Trading (WTI carry-momentum)
 - Quantpedia — Continuous futures methodology
 - Bailey & López de Prado — Deflated Sharpe Ratio
+- Martin & McCann — Ulcer Index / Ulcer Performance Index

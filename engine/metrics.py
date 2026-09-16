@@ -69,6 +69,11 @@ def compute_metrics(
     drawdowns = np.where(cummax > 0, (eq - cummax) / cummax, 0.0)
     max_drawdown = drawdowns.min()
 
+    # Ulcer Index: RMS of percentage drawdowns (Martin & McCann).
+    # Drawdowns are ≤ 0; square removes the sign.
+    ulcer_index = float(np.sqrt(np.mean(drawdowns * drawdowns)))
+    ulcer_performance_index = float(cagr / (ulcer_index + 1e-9))
+
     calmar = cagr / (abs(max_drawdown) + 1e-9)
 
     # ── Win / loss statistics ──────────────────────────────────────────────
@@ -91,6 +96,8 @@ def compute_metrics(
         "sharpe_ratio": round(float(sharpe), 4),
         "sortino_ratio": round(float(sortino), 4),
         "max_drawdown": round(float(max_drawdown), 6),
+        "ulcer_index": round(ulcer_index, 6),
+        "ulcer_performance_index": round(ulcer_performance_index, 4),
         "calmar_ratio": round(float(calmar), 4),
         "win_rate": round(float(win_rate), 4),
         "avg_win": round(float(avg_win), 6),

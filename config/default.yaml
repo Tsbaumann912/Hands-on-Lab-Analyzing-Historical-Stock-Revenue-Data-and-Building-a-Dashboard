@@ -112,6 +112,29 @@ analysis:
   walk_forward_trials: 25
   walk_forward_timeout_seconds: 90
 
+# ── CL anchored / rolling WFO validation (scripts/validate_cl_wfo.py) ─────────
+cl_validation:
+  start_date: "2008-01-01"
+  capital: 350000000.0
+  strategy: CLCarryMomentum
+  anchored_min_is_years: 3.0
+  oos_years: 1.0
+  step_years: 1.0
+  rolling_is_years: 5.0
+  rolling_oos_years: 1.0
+  purge_bars: 5
+  n_trials: 25
+  timeout_seconds: 120
+  max_dd_limit: 0.30
+  min_sharpe: 0.0
+  min_upi: 0.0
+  min_cagr: 0.0
+  risk_max_daily_drawdown_pct: 0.35
+  risk_halt_on_breach: false
+  risk_max_position_size_pct: 0.10
+  risk_max_leverage: 10.0
+  periods_per_year: 252
+
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.
 contracts:
