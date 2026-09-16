@@ -15,11 +15,18 @@ if str(ROOT) not in sys.path:
 
 from silver_ensemble.blend import agreement_ratio, blend_forecasts
 from silver_ensemble.data import build_feature_matrix, dataframe_to_bars, make_synthetic_si
-from silver_ensemble.engine import BacktestEngine
+from silver_ensemble.engine import BacktestEngine, _compute_metrics
 from silver_ensemble.forecasts import compute_all_forecasts, forecast_tsmom
 from silver_ensemble.models import Direction, load_config
 from silver_ensemble.strategy import SilverEnsembleStrategy
-from silver_ensemble.validation import deflated_sharpe_ratio, validate_ensemble
+from silver_ensemble.validation import (
+    build_anchored_windows,
+    build_rolling_windows,
+    deflated_sharpe_ratio,
+    run_institutional_wfo,
+    stitch_oos_equity,
+    validate_ensemble,
+)
 
 
 def test_no_quantterminal_import() -> None:
@@ -48,6 +55,11 @@ def test_config_loads() -> None:
     assert cfg.contract.multiplier == 5000.0
     assert abs(sum(cfg.ensemble.weights.values()) - 1.0) < 1e-9
     assert 126 in cfg.ensemble.horizons_days
+    assert cfg.portfolio.initial_cash == 350_000_000.0
+    assert cfg.risk.max_contracts == 2500
+    assert cfg.validation.max_drawdown_gate == 0.30
+    assert cfg.backtest.data_start == "2008-01-01"
+    assert cfg.backtest.is_years == 3
 
 
 def test_tsmom_signs_on_trending_series() -> None:
@@ -96,6 +108,9 @@ def test_backtest_synthetic_runs() -> None:
     result = BacktestEngine(cfg).run(bars)
     assert result.equity_curve.shape[0] == len(bars)
     assert "sharpe" in result.metrics
+    assert "cagr" in result.metrics
+    assert "ulcer_index" in result.metrics
+    assert "upi" in result.metrics
     assert result.metrics["n_bars"] == float(len(bars))
 
 
@@ -144,3 +159,73 @@ def test_notional_uses_si_multiplier() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
     assert cfg.contract.multiplier == 5000.0
     assert abs(cfg.contract.tick_value - 25.0) < 1e-9
+
+
+def test_metrics_cagr_ulcer_on_monotone_equity() -> None:
+    # Steady growth: positive CAGR, near-zero Ulcer, finite UPI
+    eq = 1_000_000.0 * np.cumprod(np.full(504, 1.001))
+    eq = np.concatenate([[1_000_000.0], eq])
+    m = _compute_metrics(eq)
+    assert m["cagr"] > 0.0
+    assert m["ulcer_index"] < 1.0
+    assert m["max_drawdown"] < 0.01
+    assert m["upi"] >= 0.0
+
+
+def test_metrics_drawdown_raises_ulcer() -> None:
+    eq = np.array([100.0, 110.0, 90.0, 95.0, 100.0], dtype=np.float64)
+    m = _compute_metrics(eq)
+    assert m["max_drawdown"] > 0.15
+    assert m["ulcer_index"] > 0.0
+
+
+def test_rolling_window_indices_purge() -> None:
+    wins = build_rolling_windows(n_bars=3000, is_bars=756, oos_bars=252, step_bars=252, purge=5)
+    assert len(wins) >= 5
+    for is_s, is_e, oos_s, oos_e in wins:
+        assert is_e - is_s == 756
+        assert oos_e - oos_s == 252
+        assert oos_s == is_e + 5
+        assert is_s >= 0
+        assert oos_e <= 3000
+
+
+def test_anchored_window_indices_expand() -> None:
+    wins = build_anchored_windows(n_bars=3000, min_is_bars=756, oos_bars=252, step_bars=252, purge=5)
+    assert len(wins) >= 5
+    for is_s, is_e, oos_s, oos_e in wins:
+        assert is_s == 0
+        assert oos_s == is_e + 5
+        assert oos_e - oos_s == 252
+        assert is_e >= 756
+    # IS expands over windows
+    assert wins[-1][1] > wins[0][1]
+
+
+def test_stitch_oos_equity_compounds() -> None:
+    a = np.array([100.0, 110.0, 121.0])
+    b = np.array([50.0, 55.0])
+    st = stitch_oos_equity([a, b], initial_cash=100.0)
+    assert st[0] == pytest.approx(100.0)
+    # After first segment ends at 121; second grows 10% → 133.1
+    assert st[-1] == pytest.approx(133.1)
+
+
+def test_institutional_wfo_synthetic_schema() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    # ≥ 3y IS + several OOS years
+    bars = dataframe_to_bars(make_synthetic_si(n_days=2800, seed=11), "SI")
+    report = run_institutional_wfo(cfg, bars)
+    assert report.account_size == 350_000_000.0
+    assert report.n_bars == len(bars)
+    assert len(report.rolling.windows) >= 1
+    assert len(report.anchored.windows) >= 1
+    for key in ("sharpe", "cagr", "upi", "max_drawdown", "ulcer_index"):
+        assert key in report.rolling.stitched_metrics
+        assert key in report.anchored.stitched_metrics
+    # Anchored IS always starts at 0
+    assert all(w.is_start == 0 for w in report.anchored.windows)
+    # Gates evaluated (passed may be True or False on synthetic)
+    assert isinstance(report.passed, bool)
+    assert isinstance(report.rolling.passed, bool)
+    assert isinstance(report.anchored.passed, bool)

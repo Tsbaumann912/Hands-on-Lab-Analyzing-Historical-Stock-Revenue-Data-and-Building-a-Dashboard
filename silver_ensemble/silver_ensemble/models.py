@@ -107,12 +107,21 @@ class BacktestConfig:
     walk_forward_windows: int
     in_sample_ratio: float
     purge_bars: int
+    data_start: str
+    is_years: int
+    oos_years: int
+    step_years: int
 
 
 @dataclass(frozen=True)
 class ValidationConfig:
     dsr_pass_threshold: float
     oos_retention_min: float
+    max_drawdown_gate: float
+    min_oos_sharpe: float
+    min_oos_cagr: float
+    min_oos_upi: float
+    require_both_modes: bool
 
 
 @dataclass(frozen=True)
@@ -188,13 +197,22 @@ def load_config(path: str | Path | None = None) -> Config:
         ),
         portfolio=PortfolioConfig(initial_cash=float(p["initial_cash"])),
         backtest=BacktestConfig(
-            walk_forward_windows=int(b["walk_forward_windows"]),
-            in_sample_ratio=float(b["in_sample_ratio"]),
-            purge_bars=int(b["purge_bars"]),
+            walk_forward_windows=int(b.get("walk_forward_windows", 4)),
+            in_sample_ratio=float(b.get("in_sample_ratio", 0.70)),
+            purge_bars=int(b.get("purge_bars", 5)),
+            data_start=str(b.get("data_start", "2008-01-01")),
+            is_years=int(b.get("is_years", 3)),
+            oos_years=int(b.get("oos_years", 1)),
+            step_years=int(b.get("step_years", 1)),
         ),
         validation=ValidationConfig(
-            dsr_pass_threshold=float(v["dsr_pass_threshold"]),
-            oos_retention_min=float(v["oos_retention_min"]),
+            dsr_pass_threshold=float(v.get("dsr_pass_threshold", 0.95)),
+            oos_retention_min=float(v.get("oos_retention_min", 0.60)),
+            max_drawdown_gate=float(v.get("max_drawdown_gate", 0.30)),
+            min_oos_sharpe=float(v.get("min_oos_sharpe", 0.0)),
+            min_oos_cagr=float(v.get("min_oos_cagr", 0.0)),
+            min_oos_upi=float(v.get("min_oos_upi", 0.0)),
+            require_both_modes=bool(v.get("require_both_modes", True)),
         ),
         raw=raw,
     )

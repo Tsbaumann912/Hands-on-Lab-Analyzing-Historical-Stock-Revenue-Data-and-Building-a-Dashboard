@@ -9,10 +9,10 @@ This package implements a CTA-style silver algorithm that is **not** part of Qua
 3. **Forecasts** — map each sleeve to Carver-scale \(f \in [-20, 20]\) with target mean \(|f|\approx 10\).
 4. **Blend** — majority-sign consensus, disagreement flatten, forecast diversification multiplier (FDM).
 5. **Size** — EWMA vol targeting on SI notional \(P \times 5000 \times N\).
-6. **Validate** — ablation, purged walk-forward, Deflated Sharpe before promotion.
+6. **Validate** — ablation, Deflated Sharpe, plus **anchored and rolling** institutional walk-forward gated on Sharpe, UPI, CAGR, and max DD < 30%.
 
 ```
-hypothesis → features → forecast → vol-target size → cost-aware backtest → purged WFO / DSR → paper → live
+hypothesis → features → forecast → vol-target size → cost-aware backtest → anchored/rolling WFO → paper → live
 ```
 
 ## Economic rationale (sleeves)
@@ -46,13 +46,42 @@ N_t = \mathrm{round}\!\left(\frac{f^\star_t}{10}\cdot\frac{\sigma_{\mathrm{targe
 
 **Deflated Sharpe:** Bailey–López de Prado correction for selection bias under \(N\) trials and non-normal returns (`validation/`).
 
+**Ulcer Index / UPI (Peter Martin):**
+
+\[
+D_t = 100 \times \left(\frac{E_t}{\mathrm{peak}_t} - 1\right),\quad
+UI = \sqrt{\mathrm{mean}(D_t^2)},\quad
+UPI = \frac{\mathrm{CAGR}}{UI/100}
+\]
+
+## Institutional walk-forward ($350M, 2008–now)
+
+Config defaults: `portfolio.initial_cash = 350_000_000`, `risk.max_contracts = 2500`,
+`max_daily_drawdown_pct = 0.30`, data from `backtest.data_start = 2008-01-01`.
+
+| Mode | In-sample | Out-of-sample | Step |
+|------|-----------|---------------|------|
+| **Rolling** | Fixed 3y (756 bars) | Next 1y (252 bars) | Slide start by 1y |
+| **Anchored** | From first bar, expanding to OOS − purge | Next 1y | OOS advances by 1y; IS always starts at \(t_0\) |
+
+Purge gap between IS and OOS: `purge_bars` (default 5). Fixed strategy parameters (no per-window Optuna).
+
+**Mode pass** requires stitched OOS equity to satisfy **all**:
+`sharpe ≥ min_oos_sharpe`, `upi ≥ min_oos_upi`, `cagr ≥ min_oos_cagr`, and
+`max_drawdown < 0.30`. Overall pass requires **both** modes (`require_both_modes: true`).
+
+```bash
+python -m silver_ensemble.cli validate-wfo --start 2008-01-01
+python -m silver_ensemble.cli validate-wfo --synthetic
+```
+
 ## Robust combination
 
 - Majority-sign consensus (opposing sleeves dropped, not averaged away).
 - Disagreement flatten when agreement < `agreement_min`.
 - Forecast diversification multiplier (FDM).
 - EWMA volatility targeting + fractional Kelly + hard contract/leverage caps.
-- Promotion: ablation, purged walk-forward, Deflated Sharpe.
+- Promotion: ablation, purged walk-forward, Deflated Sharpe, institutional anchored/rolling WFO.
 
 ## Data notes / proxies
 
@@ -70,6 +99,7 @@ pip install -e .
 pytest -q
 python -m silver_ensemble.cli backtest --synthetic --plot-summary
 python -m silver_ensemble.cli validate --synthetic
+python -m silver_ensemble.cli validate-wfo --start 2008-01-01
 ```
 
 ## Selected references

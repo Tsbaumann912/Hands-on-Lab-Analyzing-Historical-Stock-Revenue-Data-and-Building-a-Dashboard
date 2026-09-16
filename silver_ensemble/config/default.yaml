@@ -36,21 +36,31 @@ ensemble:
   take_profit_atr_mult: 4.0
 
 risk:
-  max_daily_drawdown_pct: 0.03
+  max_daily_drawdown_pct: 0.30
   max_position_size_pct: 0.50
   max_leverage: 5.0
-  max_contracts: 20
+  max_contracts: 2500
   halt_on_breach: true
 
 portfolio:
-  # SI notional ≈ price × 5,000 (~$150k/contract at $30/oz); size for ≥1 lot.
-  initial_cash: 500000.0
+  # Institutional validation account ($350M AUM).
+  initial_cash: 350000000.0
 
 backtest:
+  data_start: "2008-01-01"
+  is_years: 3
+  oos_years: 1
+  step_years: 1
+  purge_bars: 5
+  # Legacy block WFO (used by validate_ensemble ablation path)
   walk_forward_windows: 4
   in_sample_ratio: 0.70
-  purge_bars: 5
 
 validation:
   dsr_pass_threshold: 0.95
   oos_retention_min: 0.60
+  max_drawdown_gate: 0.30
+  min_oos_sharpe: 0.0
+  min_oos_cagr: 0.0
+  min_oos_upi: 0.0
+  require_both_modes: true

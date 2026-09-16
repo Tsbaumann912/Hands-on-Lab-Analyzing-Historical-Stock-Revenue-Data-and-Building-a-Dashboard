@@ -157,15 +157,33 @@ def _yf_close_series(ticker: str, period: str, index: pd.DatetimeIndex) -> Optio
     return col.astype(np.float64)
 
 
-def load_yfinance_si(ticker: str = "SI=F", period: str = "5y") -> pd.DataFrame:
-    """Load SI continuous proxy from Yahoo Finance; synthesise curve/inventory/macro proxies."""
+def load_yfinance_si(
+    ticker: str = "SI=F",
+    period: str = "5y",
+    start: str | None = None,
+    end: str | None = None,
+) -> pd.DataFrame:
+    """Load SI continuous proxy from Yahoo Finance; synthesise curve/inventory/macro proxies.
+
+    Prefer ``start``/``end`` (e.g. ``start='2008-01-01'``) for institutional WFO;
+    fall back to ``period`` when ``start`` is unset.
+    """
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover
         raise ImportError("yfinance is required for live SI download") from exc
 
     try:
-        raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+        if start is not None:
+            raw = yf.download(
+                ticker,
+                start=start,
+                end=end,
+                auto_adjust=True,
+                progress=False,
+            )
+        else:
+            raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
     except Exception as exc:
         logger.error("SI download failed: %s", exc)
         raise RuntimeError(f"no data returned for {ticker}") from exc
@@ -190,20 +208,27 @@ def load_yfinance_si(ticker: str = "SI=F", period: str = "5y") -> pd.DataFrame:
     )
     df["inventory"] = (80_000.0 - 8_000.0 * z.fillna(0.0)).to_numpy()
 
-    gold = _yf_close_series("GC=F", period, df.index)
+    # Align auxiliary series to the same calendar as SI
+    period_for_aux = period if start is None else "max"
+    gold = _yf_close_series("GC=F", period_for_aux, df.index)
+    if gold is None and start is not None:
+        gold = _yf_close_series_range("GC=F", start, end, df.index)
     if gold is not None:
         df["gold_close"] = gold.ffill().to_numpy()
     else:
         df["gold_close"] = close * 80.0  # rough GS ratio proxy
 
-    # Real yield proxy: ^TNX (nominal 10y) change as stand-in when TIPS unavailable
-    tips = _yf_close_series("^TNX", period, df.index)
+    tips = _yf_close_series("^TNX", period_for_aux, df.index)
+    if tips is None and start is not None:
+        tips = _yf_close_series_range("^TNX", start, end, df.index)
     if tips is not None:
         df["real_yield_chg"] = tips.diff().fillna(0.0).to_numpy()
     else:
         df["real_yield_chg"] = 0.0
 
-    usd = _yf_close_series("DX-Y.NYB", period, df.index)
+    usd = _yf_close_series("DX-Y.NYB", period_for_aux, df.index)
+    if usd is None and start is not None:
+        usd = _yf_close_series_range("DX-Y.NYB", start, end, df.index)
     if usd is not None:
         df["usd_ret_20d"] = usd.pct_change(20).fillna(0.0).to_numpy()
     else:
@@ -211,6 +236,35 @@ def load_yfinance_si(ticker: str = "SI=F", period: str = "5y") -> pd.DataFrame:
 
     df.index.name = "timestamp"
     return df
+
+
+def _yf_close_series_range(
+    ticker: str,
+    start: str | None,
+    end: str | None,
+    index: pd.DatetimeIndex,
+) -> Optional[pd.Series]:
+    """Download a Yahoo close series by start/end and align to ``index``."""
+    try:
+        import yfinance as yf
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError("yfinance is required for live SI download") from exc
+
+    try:
+        raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
+    except Exception as exc:
+        logger.warning("yfinance download failed for %s: %s", ticker, exc)
+        return None
+    if raw is None or raw.empty:
+        return None
+    if isinstance(raw.columns, pd.MultiIndex):
+        col = raw["Close"] if "Close" in raw.columns.get_level_values(0) else raw.iloc[:, 0]
+        if isinstance(col, pd.DataFrame):
+            col = col.iloc[:, 0]
+    else:
+        col = raw["Close"] if "Close" in raw.columns else raw.iloc[:, 3]
+    col = col.reindex(index).ffill()
+    return col.astype(np.float64)
 
 
 def dataframe_to_bars(df: pd.DataFrame, symbol: str = "SI") -> list[Bar]:

@@ -62,3 +62,5 @@ silver_ensemble/
 - Vectorised NumPy for all hot-path numerics (no DataFrame row loops in forecasts).
 - Futures P&L uses notional: `price × 5_000 × contracts`.
 - Warm-up returns flat / NaN forecasts — never raises on short history.
+- Default account size for institutional WFO: **$350,000,000**; gate max DD **< 30%**.
+- CLI: `validate-wfo --start 2008-01-01` runs anchored + rolling walk-forward.
