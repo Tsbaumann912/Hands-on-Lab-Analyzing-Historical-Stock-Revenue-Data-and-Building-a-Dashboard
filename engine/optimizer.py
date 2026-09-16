@@ -40,6 +40,31 @@ STRATEGY_PARAM_SPACES: Dict[str, List[str]] = {
     ],
     "MomentumBreakout": ["lookback", "atr_period"],
     "TrendFollowingMACD": ["atr_period", "sma_short", "sma_long"],
+    "CLCarryCurve": [
+        "carry_back_month",
+        "carry_basis_lookback",
+        "carry_strength_atr_mult",
+        "atr_period",
+    ],
+    "CLCarryMomentum": [
+        "carry_back_month",
+        "carry_mom_lookback",
+        "carry_mom_z_max",
+        "atr_period",
+    ],
+    "CLVolTargetTSMOM": [
+        "tsmom_horizon_short",
+        "tsmom_horizon_med",
+        "tsmom_horizon_long",
+        "vol_target_annual",
+        "reaction_b",
+    ],
+    "CLInventoryConfirm": [
+        "carry_back_month",
+        "inventory_sma",
+        "inventory_expect_window",
+        "atr_period",
+    ],
 }
 
 
@@ -196,6 +221,13 @@ class WalkForwardOptimizer:
         in_sample_ratio: float = 0.70,
         n_trials: int = 50,
         timeout: Optional[int] = 120,
+        mode: str = "legacy_blocks",
+        *,
+        min_is_bars: Optional[int] = None,
+        is_bars: Optional[int] = None,
+        oos_bars: Optional[int] = None,
+        step_bars: Optional[int] = None,
+        purge_bars: int = 0,
     ) -> WFOResult:
         """
         Execute walk-forward optimisation.
@@ -205,20 +237,60 @@ class WalkForwardOptimizer:
         bars:
             Full multi-symbol bar dataset.
         n_windows:
-            Number of rolling WFO windows.
+            Number of windows when ``mode="legacy_blocks"``.
         in_sample_ratio:
-            Fraction of each window used for IS optimisation.
+            Fraction of each legacy block used for IS optimisation.
         n_trials:
             Number of Optuna trials per IS window.
         timeout:
             Maximum seconds per Optuna study (``None`` = unlimited).
+        mode:
+            ``legacy_blocks`` (default, Strategy Lab), ``anchored``, or ``rolling``.
         """
         if not HAS_OPTUNA:
             raise RuntimeError(
                 "optuna not installed. Run: pip install optuna"
             )
 
-        windows = self._build_windows(bars, n_windows, in_sample_ratio)
+        mode_l = (mode or "legacy_blocks").lower().strip()
+        if mode_l == "legacy_blocks":
+            windows = self._build_windows(bars, n_windows, in_sample_ratio)
+        else:
+            from engine.walk_forward import (
+                build_anchored_windows,
+                build_rolling_windows,
+                years_to_bars,
+            )
+
+            if mode_l == "anchored":
+                min_is = min_is_bars if min_is_bars is not None else years_to_bars(3)
+                oos = oos_bars if oos_bars is not None else years_to_bars(1)
+                step = step_bars if step_bars is not None else oos
+                windows = build_anchored_windows(bars, min_is, oos, step)
+            elif mode_l == "rolling":
+                is_len = is_bars if is_bars is not None else years_to_bars(5)
+                oos = oos_bars if oos_bars is not None else years_to_bars(1)
+                step = step_bars if step_bars is not None else oos
+                windows = build_rolling_windows(
+                    bars, is_len, oos, step, purge_bars=purge_bars
+                )
+            else:
+                raise ValueError(f"Unknown WFO mode: {mode!r}")
+
+        return self.run_on_windows(windows, n_trials=n_trials, timeout=timeout)
+
+    def run_on_windows(
+        self,
+        windows: List[WFOWindow],
+        n_trials: int = 50,
+        timeout: Optional[int] = 120,
+    ) -> WFOResult:
+        """Optimise each provided window's IS segment and evaluate on OOS."""
+        if not HAS_OPTUNA:
+            raise RuntimeError(
+                "optuna not installed. Run: pip install optuna"
+            )
+
         oos_metrics_list: List[Dict[str, float]] = []
         best_params_list: List[Dict[str, Any]] = []
 
