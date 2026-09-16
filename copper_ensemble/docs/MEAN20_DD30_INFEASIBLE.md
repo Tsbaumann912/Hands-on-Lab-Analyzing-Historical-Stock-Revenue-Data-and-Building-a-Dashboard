@@ -19,10 +19,12 @@
 
 ## Production
 
-Re-optimized for **max profit under DD < 30%** (not the unmet 20% mean target):
-`L_maxprofit_dd30` ≈ **+105%** total / **~3.9%** mean yearly / **~29.9%** max DD /
-all calendar years green. Shipping a “20% mean / DD<30%” config would still be false —
-no such point exists on this Pareto surface.
+The unmet dual target is still infeasible. Current production maximizes **all-green
+profit without a DD hard cap**: `L_allgreen_maxprofit` ≈ **+286%** total /
+**~7.6%** mean yearly / **0** losing years (path max DD ≈ **88%**). The DD-aware
+menu entry `L_maxprofit_dd30` ≈ **+105%** / **~3.9%** / **~29.9%** DD remains available.
+Shipping a “20% mean / DD<30%” config would still be false — no such point exists
+on this Pareto surface.
 
 Artifacts:
 - `/opt/cursor/artifacts/copper_mean20_dd30_probe.json`

@@ -71,25 +71,26 @@ python -m copper_ensemble.cli validate --start 2008-01-01
 
 Two modes (`python -m copper_ensemble.cli optimize --start 2008-01-01`):
 
-1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~6 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
+1. **`--mode candidates` (default, recommended)** — score a **fixed menu** of ~7 economically motivated variants on nested purged OOS using **UPI** (rolling + anchored). Use `--metric sharpe` for the legacy Sharpe-only rank.
 2. **`--mode optuna`** — nested purged WFA: Optuna maximises **IS-only** UPI-weighted score per window; OOS is evaluation-only; production params = median of IS winners. On Yahoo HG 2008→now free Optuna did **not** beat the untuned baseline.
 
-**Production choice (2008→now):** `L_maxprofit_dd30` — maximises total / mean yearly
-profit subject to **max system DD < 30%**, while keeping the calendar-year profit lock:
+**Production choice (2008→now):** `L_allgreen_maxprofit` — maximises total / mean yearly
+profit subject to **every calendar year profitable** (no hard max-DD cap):
 
 1. Shorter horizons `[21, 63]`, high agreement (0.50), TSMOM + MA + StochRSI blend
-   (`0.50 / 0.25 / 0.25`), `vol_target_annual=0.30`, Kelly `1.0`.
-2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.05%) after
-   `yearly_profit_lock_min_days=2`, flatten for the rest of the year (Nov protect on).
+   (`0.50 / 0.25 / 0.25`), `vol_target_annual=0.85`, Kelly `1.0`.
+2. **Calendar-year profit lock** — once YTD ≥ `yearly_profit_lock_pct` (0.5%) after
+   `yearly_profit_lock_min_days=1`, flatten for the rest of the year (Nov protect on).
 3. **Enforced ATR stop / take-profit** (`stop_atr_mult=4`, `take_profit_atr_mult=20`)
-   plus system drawdown halt (`max_daily_drawdown_pct=0.25`), `max_position_size_pct=6`,
-   `max_contracts=28`.
+   plus system drawdown halt (`max_daily_drawdown_pct=0.45`), `max_position_size_pct=15`,
+   `max_contracts=80`.
 
-Full-sample Yahoo HG 2008→now: total ≈ **+105%**, mean yearly ≈ **+3.9%**,
-max DD ≈ **29.9%**, **0** losing calendar years. Search:
-`scripts/pin_maxprofit_dd30.py`, artifacts `copper_maxprofit_dd30_*.json`.
+Full-sample Yahoo HG 2008→now: total ≈ **+286%**, mean yearly ≈ **+7.6%**,
+min year ≈ **+0.64%**, **0** losing calendar years (path max DD ≈ **88%**). Search:
+`scripts/search_allgreen_maxprofit.py`, artifacts `copper_allgreen_maxprofit_*.json`.
 
-Legacy `H_yearly_profit` remains in the candidate menu (~+74% total / ~26.5% DD).
+Legacy `L_maxprofit_dd30` (max profit under DD < 30%) remains in the candidate menu
+(~+105% total / ~3.9% mean / ~29.9% DD). `H_yearly_profit` also remains (~+74% / ~26.5% DD).
 
 ### Can mean calendar-year return ≥ 20% with max system DD < 30%?
 
@@ -108,7 +109,9 @@ Searched **1,050+** lock-off/lock-on configs and **384** soft-lock configs on Ya
 
 **Pareto read:** under DD < 30% the yearly lock caps mean yearly near ~3–4%. Unlocking (or softening) the lock is what lifts arithmetic mean toward/above 20%, but path drawdowns blow out to ~90%+. Same knobs cannot clear both gates together on this single-name HG sample.
 
-Production remains the **DD-aware yearly-lock book** (all-green / low DD), not an unmet 20%+DD<30 dual target. Search artifacts: `scripts/probe_mean20_dd30.py`, `/opt/cursor/artifacts/copper_mean20_dd30_probe.json`.
+Production remains the **all-green max-profit book** when the only gate is yearly
+profitability; the **DD-aware** `L_maxprofit_dd30` menu entry is the low-DD alternative.
+Search artifacts: `scripts/probe_mean20_dd30.py`, `/opt/cursor/artifacts/copper_mean20_dd30_probe.json`.
 
 ### Can mean calendar-year return reach 30%?
 
@@ -117,16 +120,19 @@ Production remains the **DD-aware yearly-lock book** (all-green / low DD), not a
 | Constraint | Result |
 |---|---|
 | Target | arithmetic mean calendar-year return ≥ **30%** |
-| Same methodology | all years green + ATR TP/stop + DD halt + yearly lock + `max_position_size_pct=5` / 20 contracts |
+| Same methodology | all years green + ATR TP/stop + DD halt + yearly lock |
 | HG buy&hold 2008→now | mean yearly ≈ **10%**, **7** losing years |
 | Aggressive leverage search (vol ≤ 2, pos ≤ 50×, lock ≥ 30%) | **0** all-green configs; high means come with ruin years |
 | Best all-green ceiling found (older H book) | mean yearly ≈ **3.0%**, total ≈ **+74%**, min year ≈ **+0.28%** |
-| Best max-profit under DD < 30% (production) | mean yearly ≈ **3.9%**, total ≈ **+105%**, max DD ≈ **29.9%** |
+| Best max-profit under DD < 30% | mean yearly ≈ **3.9%**, total ≈ **+105%**, max DD ≈ **29.9%** |
+| Best all-green max-profit (no DD cap, production) | mean yearly ≈ **7.6%**, total ≈ **+286%**, max DD ≈ **88%** |
 
-Pushing for 30% mean yearly requires leverage that breaks the DD / all-green constraints (and often the account). Production is the **max-profit DD<30%** book found with the same knobs (TP/stop/DD/lock/vol/Kelly), not the unmet 20%/30% mean targets.
+Pushing for 30% mean yearly requires leverage that breaks the all-green constraint
+(and often the account). Production is the **all-green max-profit** book found with
+the same knobs (TP/stop/DD/lock/vol/Kelly), not the unmet 20%/30% mean targets.
 
 On Yahoo HG 2008→now this posts **profit in every calendar year**
-(min year ≈ +0.37%, mean year ≈ **+3.9%**, total ≈ **+105%**, max DD ≈ **29.9%**).
+(min year ≈ +0.64%, mean year ≈ **+7.6%**, total ≈ **+286%**, max DD ≈ **88%**).
 This remains an **in-sample calendar objective**.
 
 ```bash

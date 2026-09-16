@@ -231,7 +231,7 @@ def test_candidate_selection_upi_metric() -> None:
     winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3, metric="upi")
     assert winner.name
     assert hasattr(winner, "composite_oos_upi")
-    assert len(ranked) >= 6
+    assert len(ranked) >= 7
     assert np.isfinite(winner.composite_oos_upi)
 
 
@@ -258,19 +258,19 @@ def test_candidate_selection_synthetic() -> None:
     bars = dataframe_to_bars(make_synthetic_hg(1200, seed=9), "HG")
     winner, ranked = select_pre_specified_candidates(cfg, bars, n_windows=3)
     assert winner.name
-    assert len(ranked) >= 6
+    assert len(ranked) >= 7
     assert np.isfinite(winner.mean_oos_sharpe)
 
 
 def test_yearly_profit_lock_all_green_on_config() -> None:
-    """Production max-profit DD<30% config should stay all-green on HG 2008→now."""
+    """Production all-green max-profit config should stay green on HG 2008→now."""
     from copper_ensemble.data import load_yfinance_hg
     from copper_ensemble.engine import BacktestEngine, calendar_year_returns
 
     cfg = load_config(ROOT / "config" / "default.yaml")
     assert cfg.risk.yearly_profit_lock_enabled is True
-    assert cfg.risk.max_position_size_pct >= 6.0
-    assert cfg.risk.max_contracts >= 28
+    assert cfg.risk.max_position_size_pct >= 15.0
+    assert cfg.risk.max_contracts >= 80
     assert cfg.ensemble.kelly_fraction >= 1.0
     try:
         bars = dataframe_to_bars(load_yfinance_hg("HG=F", start="2008-01-01"), "HG")
@@ -285,12 +285,12 @@ def test_yearly_profit_lock_all_green_on_config() -> None:
     assert not losing, f"losing years: {losing}"
     assert float(result.metrics.get("n_losing_years", 1)) == 0.0
     assert float(result.metrics.get("min_year_return", -1)) > 0.0
-    # Max-profit under DD<30%: ~+105% total / ~3.9% mean yearly / ~29.9% max DD.
-    assert float(result.metrics.get("total_return", 0.0)) >= 0.95
-    assert float(result.metrics.get("max_drawdown", 1.0)) < 0.30
+    # All-green max-profit (no DD hard cap): ~+286% total / ~7.6% mean yearly.
+    assert float(result.metrics.get("total_return", 0.0)) >= 2.50
+    assert float(result.metrics.get("min_year_return", -1)) >= 0.005
     assert cfg.ensemble.take_profit_atr_mult >= 20.0
     assert cfg.ensemble.stop_atr_mult >= 3.0
-    assert cfg.ensemble.vol_target_annual >= 0.25
+    assert cfg.ensemble.vol_target_annual >= 0.80
 
 
 def test_yfinance_start_2008_loads(monkeypatch: pytest.MonkeyPatch) -> None:
