@@ -123,18 +123,46 @@ class BacktestEngine:
         tick = self.config.contract.tick_size
         slip = self.config.contract.slippage_ticks * tick
         commission = self.config.contract.commission_per_contract
+        rf_daily = float(self.config.portfolio.cash_interest_annual) / 252.0
+        margin_frac = float(self.config.portfolio.margin_fraction)
+        lock_pct = float(getattr(self.config.ensemble, "year_profit_lock_pct", 0.0) or 0.0)
+        lock_min_days = int(getattr(self.config.ensemble, "year_profit_lock_min_days", 5) or 5)
 
         eq_curve = np.zeros(len(bars), dtype=np.float64)
         pos_curve = np.zeros(len(bars), dtype=np.float64)
         fills: List[Fill] = []
         signals: List[Signal] = []
         prev_close = bars[0].close
+        year_start_equity = equity
+        cur_year: Optional[int] = None
+        year_locked = False
+        days_in_year = 0
 
         for i, bar in enumerate(bars):
+            y = int(bar.timestamp.year) if hasattr(bar.timestamp, "year") else int(str(bar.timestamp)[:4])
+            if cur_year is None or y != cur_year:
+                cur_year = y
+                year_start_equity = equity
+                year_locked = False
+                days_in_year = 0
+            days_in_year += 1
+
             # MTM
             if i > 0:
                 equity += position * mult * (bar.close - prev_close)
+
+            # Idle-cash interest on unencumbered capital
+            if rf_daily > 0.0:
+                notional = abs(position) * bar.close * mult
+                margin = notional * margin_frac
+                idle = max(0.0, equity - margin)
+                equity += idle * rf_daily
+
             risk.update_equity(equity)
+
+            ytd = (equity / year_start_equity - 1.0) if year_start_equity > 1e-12 else 0.0
+            if (not year_locked) and lock_pct > 0.0 and days_in_year >= lock_min_days and ytd >= lock_pct:
+                year_locked = True
 
             raw_sig = strat.signal_at(i)
             decision = risk.evaluate(raw_sig, bar.close)
@@ -142,11 +170,12 @@ class BacktestEngine:
             signals.append(sig)
 
             target = 0.0
-            if sig.direction == Direction.LONG:
-                target = float(sig.suggested_size or 0.0)
-            elif sig.direction == Direction.SHORT:
-                short_scale = float(getattr(self.config.ensemble, "short_scale", 1.0))
-                target = -float(sig.suggested_size or 0.0) * max(0.0, min(1.0, short_scale))
+            if not year_locked:
+                if sig.direction == Direction.LONG:
+                    target = float(sig.suggested_size or 0.0)
+                elif sig.direction == Direction.SHORT:
+                    short_scale = float(getattr(self.config.ensemble, "short_scale", 1.0))
+                    target = -float(sig.suggested_size or 0.0) * max(0.0, min(1.0, short_scale))
 
             delta = target - position
             if abs(delta) >= 1.0:

@@ -259,6 +259,16 @@ def test_calendar_year_returns() -> None:
     assert cal.n_years == 2
     assert cal.years[2018] == pytest.approx(0.10, abs=1e-9)
     assert cal.years[2019] == pytest.approx(104.5 / 108.0 - 1.0, abs=1e-9)
+    assert cal.n_negative == 1
+    assert cal.min_return == pytest.approx(104.5 / 108.0 - 1.0, abs=1e-9)
+
+
+def test_year_profit_lock_and_cash_interest_config() -> None:
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    assert cfg.ensemble.year_profit_lock_pct > 0.0
+    assert cfg.ensemble.inventory_require_fade_agree is True
+    assert cfg.portfolio.cash_interest_annual > 0.0
+    assert 0.0 < cfg.portfolio.margin_fraction <= 1.0
 
 
 def test_optimize_synthetic_improves_under_dd_cap() -> None:

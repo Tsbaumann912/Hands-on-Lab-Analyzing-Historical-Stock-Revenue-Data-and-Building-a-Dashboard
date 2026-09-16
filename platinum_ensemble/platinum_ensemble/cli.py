@@ -165,7 +165,8 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         100.0 * float(result.full_metrics.get("max_drawdown", 0.0)),
     )
     full_ok = float(result.full_metrics.get("max_drawdown", 1.0)) < args.max_dd
-    return 0 if full_ok and result.full_calendar.mean_return > 0 else 1
+    all_green = result.full_calendar.n_negative == 0 and result.full_calendar.n_years > 0
+    return 0 if full_ok and all_green and result.full_calendar.mean_return > 0 else 1
 
 
 def build_parser() -> argparse.ArgumentParser:

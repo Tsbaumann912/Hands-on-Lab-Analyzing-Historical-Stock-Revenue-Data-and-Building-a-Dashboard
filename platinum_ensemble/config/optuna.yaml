@@ -1,14 +1,15 @@
-n_trials: 120
-timeout_seconds: 600
+n_trials: 150
+timeout_seconds: 900
 optimize_scope: full
 is_end_date: '2019-12-31'
-seed: 7
-min_fills: 40
-# Focused search around ablation-positive inventory + fade sleeves.
+seed: 11
+min_fills: 30
+require_all_years_positive: true
+# Maximise mean calendar-year + total return with every year green.
 vol_target_annual:
   type: float
-  low: 0.18
-  high: 0.32
+  low: 0.12
+  high: 0.35
 kelly_fraction:
   type: float
   low: 0.35
@@ -16,15 +17,15 @@ kelly_fraction:
 agreement_min:
   type: float
   low: 0.0
-  high: 0.15
+  high: 0.2
 fade_z:
   type: float
-  low: 1.0
-  high: 2.2
+  low: 0.7
+  high: 1.2
 buffer_forecast:
   type: float
-  low: 2.5
-  high: 5.5
+  low: 2.0
+  high: 5.0
 rv_entry_z:
   type: float
   low: 1.0
@@ -59,13 +60,17 @@ weight_pl_gc_rv:
   high: 0.0
 weight_inventory:
   type: float
-  low: 0.30
-  high: 0.70
+  low: 0.25
+  high: 0.55
 weight_fade:
   type: float
-  low: 0.30
-  high: 0.70
+  low: 0.45
+  high: 0.75
 short_scale:
   type: float
   low: 0.0
   high: 0.0
+year_profit_lock_pct:
+  type: float
+  low: 0.001
+  high: 0.012

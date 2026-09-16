@@ -213,6 +213,9 @@ def compute_all_forecasts(features: Dict[str, np.ndarray], cfg: EnsembleConfig) 
         & np.isfinite(inventory)
     )
     fade = np.where(aligned, 0.0, fade)
+    if getattr(cfg, "inventory_require_fade_agree", False):
+        same = (np.sign(inventory) == np.sign(fade)) & (np.abs(fade) > 1.0)
+        inventory = np.where(same, inventory, np.where(np.isnan(inventory), np.nan, 0.0))
     return {
         "tsmom": tsmom,
         "carry": forecast_carry(features["carry"], cfg),

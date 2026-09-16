@@ -24,6 +24,8 @@ class CalendarYearStats:
     median_return: float
     pct_positive: float
     n_years: int
+    min_return: float = 0.0
+    n_negative: int = 0
 
 
 @dataclass
@@ -47,7 +49,7 @@ def calendar_year_returns(
 ) -> CalendarYearStats:
     """Compute simple return per calendar year from an equity curve."""
     if equity.size < 2 or len(timestamps) != equity.size:
-        return CalendarYearStats({}, 0.0, 0.0, 0.0, 0)
+        return CalendarYearStats({}, 0.0, 0.0, 0.0, 0, 0.0, 0)
 
     years = np.array([_year_of(ts) for ts in timestamps], dtype=np.int32)
     uniq = np.unique(years)
@@ -62,7 +64,7 @@ def calendar_year_returns(
         if e0 > 1e-12:
             out[int(y)] = e1 / e0 - 1.0
     if not out:
-        return CalendarYearStats({}, 0.0, 0.0, 0.0, 0)
+        return CalendarYearStats({}, 0.0, 0.0, 0.0, 0, 0.0, 0)
     vals = np.array(list(out.values()), dtype=np.float64)
     return CalendarYearStats(
         years=out,
@@ -70,6 +72,8 @@ def calendar_year_returns(
         median_return=float(np.median(vals)),
         pct_positive=float(np.mean(vals > 0.0)),
         n_years=int(vals.size),
+        min_return=float(np.min(vals)),
+        n_negative=int(np.sum(vals <= 0.0)),
     )
 
 
@@ -128,6 +132,18 @@ def apply_trial_params(config: Config, params: Mapping[str, float]) -> Config:
         take_profit_atr_mult=config.ensemble.take_profit_atr_mult,
         gold_ticker=config.ensemble.gold_ticker,
         short_scale=float(params.get("short_scale", getattr(config.ensemble, "short_scale", 1.0))),
+        year_profit_lock_pct=float(
+            params.get(
+                "year_profit_lock_pct",
+                getattr(config.ensemble, "year_profit_lock_pct", 0.0),
+            )
+        ),
+        year_profit_lock_min_days=int(
+            getattr(config.ensemble, "year_profit_lock_min_days", 5)
+        ),
+        inventory_require_fade_agree=bool(
+            getattr(config.ensemble, "inventory_require_fade_agree", False)
+        ),
     )
     risk = replace(
         config.risk,
@@ -186,10 +202,10 @@ def run_calendar_optimize(
     max_dd_limit: float = 0.30,
 ) -> OptimizeResult:
     """
-    Optuna search maximising mean calendar-year return with Max DD < limit.
+    Optuna search maximising mean calendar-year and total return.
 
-    ``optimize_scope`` in optuna.yaml: ``full`` (default) trains on all bars;
-    ``is`` trains only through ``is_end_date``. Holdout metrics always reported.
+    Hard preference: every calendar year profitable (soft penalty if not).
+    Optional Max DD soft/hard gate via ``max_dd_limit``.
     """
     try:
         import optuna
@@ -203,6 +219,7 @@ def run_calendar_optimize(
     timeout = int(bounds.get("timeout_seconds", 600))
     seed = int(bounds.get("seed", 42))
     scope = str(bounds.get("optimize_scope", "full")).lower()
+    require_all_green = bool(bounds.get("require_all_years_positive", True))
 
     is_bars, oos_bars = split_bars_by_date(bars, is_end)
     train_bars = is_bars if scope == "is" else bars
@@ -226,6 +243,7 @@ def run_calendar_optimize(
         "weight_inventory",
         "weight_fade",
         "short_scale",
+        "year_profit_lock_pct",
     ]
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -237,14 +255,19 @@ def run_calendar_optimize(
         metrics, cal, _ = evaluate_config_on_bars(cfg, train_bars)
         max_dd = float(metrics.get("max_drawdown", 1.0))
         mean_yr = float(cal.mean_return)
+        total_ret = float(metrics.get("total_return", 0.0))
         n_fills = float(metrics.get("n_fills", 0.0))
+        n_neg = int(cal.n_negative)
+        min_yr = float(cal.min_return)
         if max_dd >= max_dd_limit:
             return -10.0 - 50.0 * (max_dd - max_dd_limit)
         if n_fills < min_fills:
             return -5.0 - 0.1 * (min_fills - n_fills)
-        # Primary objective is mean calendar-year return; tiny tie-breakers only.
-        upi = float(metrics.get("upi", 0.0))
-        return mean_yr + 0.005 * float(cal.pct_positive) + 0.0005 * max(upi, 0.0)
+        if require_all_green and n_neg > 0:
+            # Heavy penalty: prefer fewer red years, then less-red worst year.
+            return -3.0 - 1.0 * n_neg + min_yr
+        # Maximise annual + total profitability; reward higher floor year.
+        return mean_yr + 0.15 * total_ret + 0.05 * min_yr
 
     sampler = TPESampler(seed=seed)
     study = optuna.create_study(direction="maximize", sampler=sampler)
@@ -258,28 +281,32 @@ def run_calendar_optimize(
     if oos_bars:
         oos_metrics, oos_cal, _ = evaluate_config_on_bars(best_cfg, oos_bars)
     else:
-        oos_metrics, oos_cal = {}, CalendarYearStats({}, 0.0, 0.0, 0.0, 0)
+        oos_metrics, oos_cal = {}, CalendarYearStats({}, 0.0, 0.0, 0.0, 0, 0.0, 0)
     full_metrics, full_cal, _ = evaluate_config_on_bars(best_cfg, bars)
 
     notes: List[str] = [
         f"Optimize scope={scope} on {len(train_bars)} bars; IS through {is_end} "
         f"({len(is_bars)}), OOS={len(oos_bars)}",
         f"Trials completed: {len(study.trials)} (best value={study.best_value:.4f})",
-        f"Constraint: max_drawdown < {max_dd_limit:.0%}",
+        f"Constraint: max_drawdown < {max_dd_limit:.0%}; require_all_years_positive={require_all_green}",
     ]
     if float(full_metrics.get("max_drawdown", 1.0)) >= max_dd_limit:
         notes.append("WARNING: full-sample Max DD breaches constraint")
     else:
-        notes.append("Full-sample Max DD within 30% limit")
-    if full_cal.mean_return > 0:
-        notes.append(f"Full-sample mean calendar-year return {full_cal.mean_return:.2%}")
+        notes.append("Full-sample Max DD within limit")
+    if full_cal.n_negative == 0 and full_cal.n_years > 0:
+        notes.append(
+            f"All {full_cal.n_years} calendar years profitable "
+            f"(min={full_cal.min_return:.2%}, mean={full_cal.mean_return:.2%}, "
+            f"total={float(full_metrics.get('total_return', 0.0)):.2%})"
+        )
     else:
         notes.append(
-            f"Full-sample mean calendar-year return still non-positive "
-            f"({full_cal.mean_return:.2%}) — best feasible under DD cap"
+            f"Still have {full_cal.n_negative} non-positive calendar years "
+            f"(min={full_cal.min_return:.2%}) — best feasible under gates"
         )
     if oos_bars and float(oos_metrics.get("max_drawdown", 1.0)) >= max_dd_limit:
-        notes.append("WARNING: holdout OOS Max DD breaches 30%")
+        notes.append("WARNING: holdout OOS Max DD breaches limit")
 
     return OptimizeResult(
         best_params=best_params,
@@ -303,6 +330,8 @@ def optimize_result_to_dict(result: OptimizeResult) -> Dict[str, Any]:
             "median_return": c.median_return,
             "pct_positive": c.pct_positive,
             "n_years": c.n_years,
+            "min_return": c.min_return,
+            "n_negative": c.n_negative,
             "years": {str(k): v for k, v in sorted(c.years.items())},
         }
 
@@ -343,9 +372,19 @@ def write_optimized_yaml(
         "fdm_cap",
         "stop_atr_mult",
         "short_scale",
+        "year_profit_lock_pct",
     ):
         if key in p:
             ens[key] = float(p[key])
+    # Preserve structural flags from the base / seeded config.
+    ens.setdefault(
+        "inventory_require_fade_agree",
+        bool(raw.get("ensemble", {}).get("inventory_require_fade_agree", False)),
+    )
+    ens.setdefault(
+        "year_profit_lock_min_days",
+        int(raw.get("ensemble", {}).get("year_profit_lock_min_days", 5)),
+    )
     for key in ("max_position_size_pct", "max_leverage"):
         if key in p:
             risk[key] = float(p[key])

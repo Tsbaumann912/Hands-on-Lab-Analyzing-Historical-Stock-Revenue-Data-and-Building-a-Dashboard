@@ -16,34 +16,39 @@ ensemble:
     tsmom: 0.0
     carry: 0.0
     pl_gc_rv: 0.0
-    inventory: 0.391087
-    fade: 0.608913
+    inventory: 0.293409
+    fade: 0.706591
   forecast_cap: 20.0
-  agreement_min: 0.02876
-  fdm_cap: 2.452827
-  vol_target_annual: 0.240823
+  agreement_min: 0.103054
+  fdm_cap: 2.877154
+  vol_target_annual: 0.343281
   ewma_vol_com_days: 60
-  fade_z: 1.26929
-  buffer_forecast: 5.085171
-  kelly_fraction: 0.49039
+  fade_z: 0.931983
+  buffer_forecast: 3.729472
+  kelly_fraction: 0.394965
   inventory_sma: 60
   inventory_delta_days: 20
   rv_lookback: 63
-  rv_entry_z: 1.641336
+  rv_entry_z: 1.463286
   price_z_lookback: 20
   atr_period: 14
-  stop_atr_mult: 2.375191
+  stop_atr_mult: 3.647497
   take_profit_atr_mult: 4.0
   gold_ticker: GC=F
   short_scale: 0.0
+  year_profit_lock_pct: 0.005791
+  year_profit_lock_min_days: 5
+  inventory_require_fade_agree: true
 risk:
   max_daily_drawdown_pct: 0.03
-  max_position_size_pct: 0.298229
-  max_leverage: 4.400507
+  max_position_size_pct: 0.390196
+  max_leverage: 3.200407
   max_contracts: 10000
   halt_on_breach: true
 portfolio:
   initial_cash: 350000000.0
+  cash_interest_annual: 0.02
+  margin_fraction: 0.12
 backtest:
   walk_forward_windows: 4
   in_sample_ratio: 0.7

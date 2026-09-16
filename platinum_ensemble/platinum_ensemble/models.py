@@ -88,6 +88,11 @@ class EnsembleConfig:
     take_profit_atr_mult: float
     gold_ticker: str
     short_scale: float = 1.0
+    # Flatten for the rest of a calendar year once YTD return hits this level.
+    year_profit_lock_pct: float = 0.0
+    year_profit_lock_min_days: int = 5
+    # Only keep inventory forecasts that agree in sign with the fade sleeve.
+    inventory_require_fade_agree: bool = False
 
 
 @dataclass(frozen=True)
@@ -102,6 +107,10 @@ class RiskConfig:
 @dataclass(frozen=True)
 class PortfolioConfig:
     initial_cash: float
+    # Interest on unencumbered cash (institutional financing proxy).
+    cash_interest_annual: float = 0.0
+    # Initial margin as a fraction of futures notional for idle-cash calc.
+    margin_fraction: float = 0.12
 
 
 @dataclass(frozen=True)
@@ -190,6 +199,9 @@ def load_config(path: str | Path | None = None) -> Config:
             take_profit_atr_mult=float(e["take_profit_atr_mult"]),
             gold_ticker=str(e.get("gold_ticker", "GC=F")),
             short_scale=float(e.get("short_scale", 1.0)),
+            year_profit_lock_pct=float(e.get("year_profit_lock_pct", 0.0)),
+            year_profit_lock_min_days=int(e.get("year_profit_lock_min_days", 5)),
+            inventory_require_fade_agree=bool(e.get("inventory_require_fade_agree", False)),
         ),
         risk=RiskConfig(
             max_daily_drawdown_pct=float(r["max_daily_drawdown_pct"]),
@@ -198,7 +210,11 @@ def load_config(path: str | Path | None = None) -> Config:
             max_contracts=int(r["max_contracts"]),
             halt_on_breach=bool(r["halt_on_breach"]),
         ),
-        portfolio=PortfolioConfig(initial_cash=float(p["initial_cash"])),
+        portfolio=PortfolioConfig(
+            initial_cash=float(p["initial_cash"]),
+            cash_interest_annual=float(p.get("cash_interest_annual", 0.0)),
+            margin_fraction=float(p.get("margin_fraction", 0.12)),
+        ),
         backtest=BacktestConfig(
             walk_forward_windows=int(b["walk_forward_windows"]),
             in_sample_ratio=float(b["in_sample_ratio"]),
