@@ -8,6 +8,12 @@ from typing import List, Optional
 from silver_ensemble.models import Config, Direction, Signal
 
 
+def _year_of(ts: object) -> int:
+    if hasattr(ts, "year"):
+        return int(ts.year)
+    return int(str(ts)[:4])
+
+
 @dataclass
 class RiskDecision:
     approved: bool
@@ -25,12 +31,15 @@ class RiskManager:
         self._halt_reason: Optional[str] = None
         self._peak_equity: float = config.portfolio.initial_cash
         self._equity: float = config.portfolio.initial_cash
+        self._year: Optional[int] = None
+        self._year_start_equity: float = config.portfolio.initial_cash
+        self._ytd_halted: bool = False
 
     @property
     def halted(self) -> bool:
-        return self._halted
+        return self._halted or self._ytd_halted
 
-    def update_equity(self, equity: float) -> None:
+    def update_equity(self, equity: float, timestamp: object | None = None) -> None:
         self._equity = float(equity)
         self._peak_equity = max(self._peak_equity, self._equity)
         dd = 0.0 if self._peak_equity <= 0 else 1.0 - self._equity / self._peak_equity
@@ -38,13 +47,27 @@ class RiskManager:
             self._halted = True
             self._halt_reason = f"drawdown {dd:.2%} breached cap"
 
+        if timestamp is not None:
+            y = _year_of(timestamp)
+            if self._year is None or y != self._year:
+                self._year = y
+                self._year_start_equity = self._equity
+                self._ytd_halted = False
+            ytd_floor = float(self._cfg.risk.ytd_loss_halt_pct)
+            if ytd_floor > 0.0 and self._year_start_equity > 0.0:
+                ytd = self._equity / self._year_start_equity - 1.0
+                if ytd <= -ytd_floor:
+                    self._ytd_halted = True
+                    self._halt_reason = f"YTD {ytd:.2%} hit year-loss halt"
+
     def resume(self) -> None:
         self._halted = False
+        self._ytd_halted = False
         self._halt_reason = None
 
     def evaluate(self, signal: Signal, price: float) -> RiskDecision:
         reasons: List[str] = []
-        if self._halted:
+        if self._halted or self._ytd_halted:
             flat = Signal(
                 symbol=signal.symbol,
                 direction=Direction.FLAT,

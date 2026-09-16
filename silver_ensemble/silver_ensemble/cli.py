@@ -123,11 +123,13 @@ def cmd_validate_wfo(args: argparse.Namespace) -> int:
 def cmd_optimize(args: argparse.Namespace) -> int:
     cfg, bars = _load_bars_wfo(args)
     space = Path(args.search_space) if args.search_space else None
+    require_all = not bool(args.allow_losing_years)
     logger.info(
-        "Optimize avg calendar-year return | bars=%d trials=%d max_dd<%.0f%%",
+        "Optimize annual+total return | bars=%d trials=%d max_dd<%.0f%% all_years+=%s",
         len(bars),
         args.trials,
         args.max_dd * 100,
+        require_all,
     )
     baseline = evaluate_config(cfg, bars)
     best_params, best_eval, feasible = run_optimization(
@@ -137,6 +139,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         max_dd_gate=args.max_dd,
         seed=args.seed,
         search_space_path=space,
+        require_all_years_positive=require_all,
     )
     out_cfg = Path(args.out_config) if args.out_config else (
         Path(__file__).resolve().parents[1] / "config" / "default.yaml"
@@ -146,28 +149,38 @@ def cmd_optimize(args: argparse.Namespace) -> int:
         out_cfg,
         best_params,
     )
+    years_ok = bool(best_eval["all_years_positive"]) if require_all else True
+    dd_ok = bool(best_eval["max_drawdown"] < args.max_dd)
     payload = {
         "baseline": {
             "avg_calendar_year_return": baseline["avg_calendar_year_return"],
+            "min_year_return": baseline["min_year_return"],
             "max_drawdown": baseline["max_drawdown"],
             "pct_years_positive": baseline["pct_years_positive"],
+            "all_years_positive": baseline["all_years_positive"],
             "sharpe": baseline["sharpe"],
             "cagr": baseline["cagr"],
+            "total_return": baseline["total_return"],
             "year_returns": baseline["year_returns"],
         },
         "optimized": {
             "avg_calendar_year_return": best_eval["avg_calendar_year_return"],
+            "min_year_return": best_eval["min_year_return"],
             "max_drawdown": best_eval["max_drawdown"],
             "pct_years_positive": best_eval["pct_years_positive"],
+            "all_years_positive": best_eval["all_years_positive"],
             "sharpe": best_eval["sharpe"],
             "cagr": best_eval["cagr"],
             "upi": best_eval["upi"],
+            "total_return": best_eval["total_return"],
+            "end_equity": best_eval["end_equity"],
             "year_returns": best_eval["year_returns"],
         },
         "best_params": best_params,
         "n_feasible": len(feasible),
         "out_config": str(out_cfg),
-        "constraint_ok": bool(best_eval["max_drawdown"] < args.max_dd),
+        "constraint_ok": bool(years_ok and dd_ok),
+        "require_all_years_positive": require_all,
     }
     print(json.dumps(payload, indent=2))
     return 0 if payload["constraint_ok"] else 1
@@ -218,7 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     opt = sub.add_parser(
         "optimize",
-        help="Maximize avg calendar-year return subject to max DD < 30%",
+        help="Maximize annual+total return with all years profitable and max DD < 30%",
     )
     opt.add_argument("--synthetic", action="store_true")
     opt.add_argument("--days", type=int, default=3000)
@@ -226,8 +239,13 @@ def build_parser() -> argparse.ArgumentParser:
     opt.add_argument("--period", default="max")
     opt.add_argument("--start", default=None)
     opt.add_argument("--end", default=None)
-    opt.add_argument("--trials", type=int, default=80)
+    opt.add_argument("--trials", type=int, default=160)
     opt.add_argument("--max-dd", type=float, default=0.30)
+    opt.add_argument(
+        "--allow-losing-years",
+        action="store_true",
+        help="Disable the every-calendar-year profitability constraint",
+    )
     opt.add_argument(
         "--search-space",
         default=str(Path(__file__).resolve().parents[1] / "config" / "optuna.yaml"),

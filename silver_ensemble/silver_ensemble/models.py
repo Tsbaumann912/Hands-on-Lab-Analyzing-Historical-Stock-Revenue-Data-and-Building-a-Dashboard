@@ -103,11 +103,13 @@ class RiskConfig:
     max_leverage: float
     max_contracts: int
     halt_on_breach: bool
+    ytd_loss_halt_pct: float = 0.01
 
 
 @dataclass(frozen=True)
 class PortfolioConfig:
     initial_cash: float
+    collateral_yield_annual: float = 0.02
 
 
 @dataclass(frozen=True)
@@ -209,8 +211,12 @@ def load_config(path: str | Path | None = None) -> Config:
             max_leverage=float(r["max_leverage"]),
             max_contracts=int(r["max_contracts"]),
             halt_on_breach=bool(r["halt_on_breach"]),
+            ytd_loss_halt_pct=float(r.get("ytd_loss_halt_pct", 0.01)),
         ),
-        portfolio=PortfolioConfig(initial_cash=float(p["initial_cash"])),
+        portfolio=PortfolioConfig(
+            initial_cash=float(p["initial_cash"]),
+            collateral_yield_annual=float(p.get("collateral_yield_annual", 0.02)),
+        ),
         backtest=BacktestConfig(
             walk_forward_windows=int(b.get("walk_forward_windows", 4)),
             in_sample_ratio=float(b.get("in_sample_ratio", 0.70)),

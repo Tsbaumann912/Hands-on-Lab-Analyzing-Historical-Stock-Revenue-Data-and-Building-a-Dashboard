@@ -123,6 +123,8 @@ class BacktestEngine:
         tick = self.config.contract.tick_size
         slip = self.config.contract.slippage_ticks * tick
         commission = self.config.contract.commission_per_contract
+        rf_annual = float(self.config.portfolio.collateral_yield_annual)
+        rf_daily = (1.0 + rf_annual) ** (1.0 / 252.0) - 1.0 if rf_annual > 0.0 else 0.0
 
         eq_curve = np.zeros(len(bars), dtype=np.float64)
         pos_curve = np.zeros(len(bars), dtype=np.float64)
@@ -131,10 +133,12 @@ class BacktestEngine:
         prev_close = bars[0].close
 
         for i, bar in enumerate(bars):
-            # MTM
+            # MTM + collateral yield on futures account equity
             if i > 0:
                 equity += position * mult * (bar.close - prev_close)
-            risk.update_equity(equity)
+                if rf_daily != 0.0:
+                    equity *= 1.0 + rf_daily
+            risk.update_equity(equity, bar.timestamp)
 
             raw_sig = strat.signal_at(i)
             decision = risk.evaluate(raw_sig, bar.close)
@@ -146,6 +150,10 @@ class BacktestEngine:
                 target = float(sig.suggested_size or 0.0)
             elif sig.direction == Direction.SHORT:
                 target = -float(sig.suggested_size or 0.0)
+
+            # Flatten if risk layer halted mid-year
+            if risk.halted:
+                target = 0.0
 
             delta = target - position
             if abs(delta) >= 1.0:

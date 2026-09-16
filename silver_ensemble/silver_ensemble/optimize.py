@@ -1,8 +1,7 @@
-"""Calendar-year profitability optimization under a max-drawdown constraint."""
+"""Calendar-year profitability optimization under drawdown and all-years-positive gates."""
 
 from __future__ import annotations
 
-import copy
 import logging
 from dataclasses import replace
 from pathlib import Path
@@ -11,8 +10,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import yaml
 
-from silver_ensemble.engine import BacktestEngine, BacktestResult
-from silver_ensemble.models import Bar, Config, EnsembleConfig, RiskConfig, load_config
+from silver_ensemble.engine import BacktestEngine
+from silver_ensemble.models import Bar, Config
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,6 @@ def apply_trial_params(base: Config, params: Mapping[str, Any]) -> Config:
     )
     risk = replace(
         base.risk,
-        # No max-position-size cap — sizing limited by leverage / max_contracts / vol target
         max_position_size_pct=float(
             params.get("max_position_size_pct", max(base.risk.max_position_size_pct, 100.0))
         ),
@@ -60,10 +58,17 @@ def apply_trial_params(base: Config, params: Mapping[str, Any]) -> Config:
         max_daily_drawdown_pct=float(
             params.get("max_daily_drawdown_pct", min(0.29, base.risk.max_daily_drawdown_pct))
         ),
+        ytd_loss_halt_pct=float(params.get("ytd_loss_halt_pct", base.risk.ytd_loss_halt_pct)),
     )
-    # Always uncap position % (user request); keep other risk knobs searchable
+    # Always uncap position %; leverage / max_contracts / vol-target bind instead
     risk = replace(risk, max_position_size_pct=100.0)
-    return replace(base, ensemble=ens, risk=risk)
+    port = replace(
+        base.portfolio,
+        collateral_yield_annual=float(
+            params.get("collateral_yield_annual", base.portfolio.collateral_yield_annual)
+        ),
+    )
+    return replace(base, ensemble=ens, risk=risk, portfolio=port)
 
 
 def _year_of(ts: Any) -> int:
@@ -108,18 +113,26 @@ def evaluate_config(
     """Run one backtest and return profitability / risk diagnostics."""
     result = BacktestEngine(config).run(bars)
     yr = calendar_year_returns(bars, result.equity_curve)
-    avg_yr = float(np.mean(list(yr.values()))) if yr else -1.0
-    pos_frac = float(np.mean([1.0 if r > 0 else 0.0 for r in yr.values()])) if yr else 0.0
+    vals = list(yr.values())
+    avg_yr = float(np.mean(vals)) if vals else -1.0
+    min_yr = float(np.min(vals)) if vals else -1.0
+    pos_frac = float(np.mean([1.0 if r > 0.0 else 0.0 for r in vals])) if vals else 0.0
+    all_years_positive = bool(vals) and bool(np.all(np.asarray(vals, dtype=float) > 0.0))
+    total_return = float(result.metrics.get("total_return", 0.0))
     return {
         "metrics": result.metrics,
         "year_returns": {str(k): float(v) for k, v in sorted(yr.items())},
         "avg_calendar_year_return": avg_yr,
+        "min_year_return": min_yr,
         "pct_years_positive": pos_frac,
+        "all_years_positive": all_years_positive,
         "n_years": len(yr),
         "max_drawdown": float(result.metrics.get("max_drawdown", 1.0)),
         "sharpe": float(result.metrics.get("sharpe", 0.0)),
         "cagr": float(result.metrics.get("cagr", 0.0)),
         "upi": float(result.metrics.get("upi", 0.0)),
+        "total_return": total_return,
+        "end_equity": float(result.metrics.get("end_equity", 0.0)),
     }
 
 
@@ -144,7 +157,15 @@ def _suggest(trial: Any, space: Mapping[str, Any]) -> Dict[str, Any]:
     for name, bounds in space.get("risk", {}).items():
         lo, hi = bounds
         params[name] = trial.suggest_float(name, float(lo), float(hi))
+    for name, bounds in space.get("portfolio", {}).items():
+        lo, hi = bounds
+        params[name] = trial.suggest_float(name, float(lo), float(hi))
     return params
+
+
+def _profit_score(avg_yr: float, cagr: float, total_return: float) -> float:
+    """Blend annual and total profitability (CAGR bridges multi-year total return)."""
+    return float(avg_yr + cagr + 0.25 * total_return)
 
 
 def run_optimization(
@@ -154,11 +175,12 @@ def run_optimization(
     max_dd_gate: float = 0.30,
     seed: int = 42,
     search_space_path: str | Path | None = None,
+    require_all_years_positive: bool = True,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Maximize average calendar-year return subject to max DD < ``max_dd_gate``.
-
-    Returns ``(best_params, best_eval, all_feasible_summaries)``.
+    Maximize annual + total returns subject to:
+    - every calendar year return > 0 (when ``require_all_years_positive``)
+    - max drawdown < ``max_dd_gate``
     """
     import optuna
     from optuna.samplers import TPESampler
@@ -174,29 +196,48 @@ def run_optimization(
         ev = evaluate_config(cfg, bars)
         dd = float(ev["max_drawdown"])
         avg_yr = float(ev["avg_calendar_year_return"])
+        min_yr = float(ev["min_year_return"])
+        cagr = float(ev["cagr"])
+        total_ret = float(ev["total_return"])
+        all_pos = bool(ev["all_years_positive"])
+        score = _profit_score(avg_yr, cagr, total_ret)
+
         trial.set_user_attr("max_drawdown", dd)
         trial.set_user_attr("avg_calendar_year_return", avg_yr)
+        trial.set_user_attr("min_year_return", min_yr)
         trial.set_user_attr("pct_years_positive", ev["pct_years_positive"])
+        trial.set_user_attr("all_years_positive", all_pos)
         trial.set_user_attr("sharpe", ev["sharpe"])
-        trial.set_user_attr("cagr", ev["cagr"])
+        trial.set_user_attr("cagr", cagr)
         trial.set_user_attr("upi", ev["upi"])
+        trial.set_user_attr("total_return", total_ret)
         trial.set_user_attr("year_returns", ev["year_returns"])
-        # Soft penalty if DD breaches gate (keeps search guided)
+        trial.set_user_attr("profit_score", score)
+
+        # Lexicographic soft penalties: first all-years+, then DD, then profit
+        if require_all_years_positive and not all_pos:
+            # Push min year toward positive; keep below any feasible profit score
+            return float(min_yr - 1.0)
         if dd >= max_dd_gate:
-            return avg_yr - 5.0 * (dd - max_dd_gate + 0.01)
+            return float(score - 5.0 * (dd - max_dd_gate + 0.01))
+
         feasible.append(
             {
                 "params": params,
                 "avg_calendar_year_return": avg_yr,
+                "min_year_return": min_yr,
                 "max_drawdown": dd,
                 "pct_years_positive": ev["pct_years_positive"],
+                "all_years_positive": all_pos,
                 "sharpe": ev["sharpe"],
-                "cagr": ev["cagr"],
+                "cagr": cagr,
                 "upi": ev["upi"],
+                "total_return": total_ret,
+                "profit_score": score,
                 "year_returns": ev["year_returns"],
             }
         )
-        return avg_yr
+        return score
 
     study = optuna.create_study(
         direction="maximize",
@@ -204,10 +245,14 @@ def run_optimization(
     )
     study.optimize(objective, n_trials=int(n_trials), show_progress_bar=False)
 
-    # Prefer best feasible (DD < gate); else best trial overall
     feasible_sorted = sorted(
         feasible,
-        key=lambda x: (x["avg_calendar_year_return"], x["sharpe"]),
+        key=lambda x: (
+            float(x["profit_score"]),
+            float(x["avg_calendar_year_return"]),
+            float(x["total_return"]),
+            float(x["sharpe"]),
+        ),
         reverse=True,
     )
     if feasible_sorted:
@@ -218,15 +263,17 @@ def run_optimization(
     else:
         t = study.best_trial
         best_params = dict(t.params)
-        # Ensure weight keys present
-        for k in SLEEVE_KEYS:
-            if f"w_{k}" not in best_params and f"w_{k}" in t.params:
-                best_params[f"w_{k}"] = t.params[f"w_{k}"]
         best_cfg = apply_trial_params(base, best_params)
         best_eval = evaluate_config(best_cfg, bars)
-        logger.warning("No trial satisfied max_dd < %.2f; returning best penalized trial", max_dd_gate)
+        logger.warning(
+            "No trial satisfied all-years-positive=%s and max_dd < %.2f; "
+            "returning best penalized trial (min_year=%.4f dd=%.4f)",
+            require_all_years_positive,
+            max_dd_gate,
+            best_eval["min_year_return"],
+            best_eval["max_drawdown"],
+        )
 
-    # Normalise weights in returned params for YAML writing
     w = {k: float(best_params[f"w_{k}"]) for k in SLEEVE_KEYS}
     s = sum(w.values())
     best_params_out = {
@@ -265,20 +312,26 @@ def write_optimized_yaml(
     for key in ("ma_fast", "ma_slow", "rsi_period", "stoch_rsi_period", "stoch_rsi_smooth"):
         if key in best_params:
             ens[key] = int(best_params[key])
-    for key in ("max_leverage", "max_daily_drawdown_pct"):
+    for key in ("max_leverage", "max_daily_drawdown_pct", "ytd_loss_halt_pct"):
         if key in best_params:
             risk[key] = float(best_params[key])
-    # Uncapped position size (leverage / max_contracts / vol-target bind instead)
     risk["max_position_size_pct"] = 100.0
-    # Keep halt inside 30% gate
     risk["max_daily_drawdown_pct"] = min(float(risk.get("max_daily_drawdown_pct", 0.29)), 0.29)
     risk["halt_on_breach"] = True
+    port = dict(raw.get("portfolio", {}))
+    if "collateral_yield_annual" in best_params:
+        port["collateral_yield_annual"] = float(best_params["collateral_yield_annual"])
     raw["ensemble"] = ens
     raw["risk"] = risk
+    raw["portfolio"] = port
     raw["optimization"] = {
-        "objective": "maximize_avg_calendar_year_return",
-        "constraint": "max_drawdown < 0.30",
-        "applied_params": {k: (dict(v) if isinstance(v, dict) else float(v) if isinstance(v, (int, float)) else v) for k, v in best_params.items()},
+        "objective": "maximize_avg_calendar_year_return_and_total_return",
+        "constraint": "all_calendar_years_positive and max_drawdown < 0.30",
+        "max_position_size_pct": "uncapped (100.0)",
+        "applied_params": {
+            k: (dict(v) if isinstance(v, dict) else float(v) if isinstance(v, (int, float)) else v)
+            for k, v in best_params.items()
+        },
     }
     out_yaml_path.parent.mkdir(parents=True, exist_ok=True)
     with out_yaml_path.open("w") as fh:

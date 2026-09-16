@@ -273,7 +273,12 @@ def test_calendar_year_returns_and_optimize_apply() -> None:
     assert cfg2.risk.max_position_size_pct >= 100.0
     ev = evaluate_config(cfg2, bars)
     assert "avg_calendar_year_return" in ev
+    assert "min_year_return" in ev
+    assert "all_years_positive" in ev
+    assert "total_return" in ev
     assert ev["max_drawdown"] >= 0.0
+    assert ev["pct_years_positive"] >= 0.0
+    assert ev["pct_years_positive"] <= 1.0
 
 
 def test_stoch_ma_sleeve_signs() -> None:

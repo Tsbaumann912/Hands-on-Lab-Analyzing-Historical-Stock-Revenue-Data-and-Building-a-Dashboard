@@ -49,8 +49,10 @@ risk:
   max_leverage: 4.302
   max_contracts: 2500
   halt_on_breach: true
+  ytd_loss_halt_pct: 0.01
 portfolio:
   initial_cash: 350000000.0
+  collateral_yield_annual: 0.02
 backtest:
   data_start: '2008-01-01'
   is_years: 3
