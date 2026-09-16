@@ -15,6 +15,7 @@ Combines five economically motivated forecast sleeves into one vol-targeted ense
 | **C Basis-momentum** | Change in futures basis |
 | **D Inventory-trend** | Inventory draws/builds confirming price trend |
 | **E GS-ratio / real-yield fade** | Gold–silver relative value + fade when real yields and USD rise |
+| **F StochRSI + Fast/Slow MA** | MA trend with Stochastic RSI pullback confirmation |
 
 Robustness features: disagreement flattening, trend-over-fade gate, EWMA volatility targeting, fractional Kelly caps, sleeve ablation, purged walk-forward, and Deflated Sharpe helpers.
 

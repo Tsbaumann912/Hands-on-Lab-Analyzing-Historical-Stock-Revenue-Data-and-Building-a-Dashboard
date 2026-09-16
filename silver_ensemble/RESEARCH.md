@@ -25,6 +25,7 @@ hypothesis → features → forecast → vol-target size → cost-aware backtest
    - Extreme \(\log(P_{GC}/P_{SI})\) mean-reverts or signals relative value.
    - Rising real yields + rising USD raise the opportunity cost of non-yielding metal → fade stretched SI z-scores.
    - Disabled when TSMOM and inventory tightness agree (structural trend gate).
+6. **StochRSI + Fast/Slow MA** — Trend from SMA(fast) vs SMA(slow); entries confirmed by Stochastic RSI pullbacks (oversold in uptrend / overbought in downtrend).
 
 ## Applied math
 
@@ -82,9 +83,10 @@ Objective: **maximize average calendar-year equity return** subject to
 **max system drawdown &lt; 30%** (`silver_ensemble/optimize.py`, search space in
 `config/optuna.yaml`).
 
-Tunable knobs: sleeve weights, vol target, Kelly fraction, agreement/buffer/fade
-thresholds, ATR stops, position/leverage caps. Circuit-breaker halt is set to
-29% so realised max DD stays strictly below the 30% gate.
+Tunable knobs: sleeve weights (incl. `stoch_ma`), MA/StochRSI periods, vol target, Kelly fraction,
+agreement/buffer/fade thresholds, ATR stops, leverage caps. **`max_position_size_pct` is fixed at
+0.05 (5% of equity)**. Circuit-breaker halt is set to 29% so realised max DD stays strictly below
+the 30% gate.
 
 CLI:
 
