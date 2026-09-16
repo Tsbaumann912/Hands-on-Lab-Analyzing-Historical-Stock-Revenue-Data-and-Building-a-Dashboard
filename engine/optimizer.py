@@ -401,7 +401,6 @@ class WalkForwardOptimizer:
         timeout: Optional[int],
     ) -> tuple[Dict[str, Any], BacktestResult]:
         """Run an Optuna study on the IS window and return the best params."""
-        from engine.metrics import all_calendar_years_profitable
 
         def objective(trial: "optuna.Trial") -> float:  # type: ignore[name-defined]
             params = {k: fn(trial) for k, fn in self._search_space.items()}
@@ -431,9 +430,9 @@ class WalkForwardOptimizer:
                 total_ret = 0.0
             worst_year = min(year_rets.values()) if year_rets else 0.0
             if self._objective_metric == "cagr":
-                score = score + 0.25 * total_ret + 0.75 * float(worst_year)
+                score = score + 0.25 * total_ret + 1.5 * float(worst_year)
             elif year_rets:
-                score = score + 0.5 * float(worst_year)
+                score = score + 1.0 * float(worst_year)
             return score
 
         study = optuna.create_study(direction="maximize")  # type: ignore[union-attr]
