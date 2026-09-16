@@ -132,11 +132,12 @@ def rolling_std(x: np.ndarray, window: int) -> np.ndarray:
     if window < 2 or n < window:
         return out
     from numpy.lib.stride_tricks import sliding_window_view
+    import warnings
 
     windows = sliding_window_view(x_f, window)
-    with np.errstate(invalid="ignore"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
         stds = np.nanstd(windows, axis=-1, ddof=1)
-    # Windows with <2 finite samples → NaN
     finite_counts = np.sum(np.isfinite(windows), axis=-1)
     stds = np.where(finite_counts >= 2, stds, np.nan)
     out[window - 1 :] = stds
