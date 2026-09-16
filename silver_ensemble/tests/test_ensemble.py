@@ -59,7 +59,7 @@ def test_config_loads() -> None:
     assert 126 in cfg.ensemble.horizons_days
     assert cfg.portfolio.initial_cash == 350_000_000.0
     assert cfg.risk.max_contracts == 2500
-    assert cfg.risk.max_position_size_pct == 0.05
+    assert cfg.risk.max_position_size_pct >= 100.0
     assert cfg.validation.max_drawdown_gate == 0.30
     assert cfg.backtest.data_start == "2008-01-01"
     assert cfg.backtest.is_years == 3
@@ -270,7 +270,7 @@ def test_calendar_year_returns_and_optimize_apply() -> None:
     cfg2 = apply_trial_params(cfg, params)
     assert abs(sum(cfg2.ensemble.weights.values()) - 1.0) < 1e-9
     assert cfg2.ensemble.vol_target_annual == 0.08
-    assert cfg2.risk.max_position_size_pct == 0.05
+    assert cfg2.risk.max_position_size_pct >= 100.0
     ev = evaluate_config(cfg2, bars)
     assert "avg_calendar_year_return" in ev
     assert ev["max_drawdown"] >= 0.0

@@ -1,7 +1,7 @@
 # Optuna search space for silver ensemble calendar-year profitability.
 # Objective: maximize mean calendar-year equity return
 # Constraint: max_drawdown < 0.30
-# Note: max_position_size_pct is fixed at 0.05 (5%) and not searched.
+# Note: max_position_size_pct is uncapped (100.0); leverage/contracts/vol-target bind.
 
 n_trials: 80
 max_dd_gate: 0.30
@@ -16,8 +16,8 @@ weights:
   stoch_ma: [0.08, 0.40]
 
 ensemble:
-  vol_target_annual: [0.04, 0.10]
-  kelly_fraction: [0.15, 0.40]
+  vol_target_annual: [0.05, 0.18]
+  kelly_fraction: [0.15, 0.45]
   agreement_min: [0.35, 0.70]
   buffer_forecast: [1.5, 5.0]
   fade_z: [1.5, 3.0]
@@ -32,4 +32,4 @@ ensemble:
   stoch_overbought: [0.70, 0.90]
 
 risk:
-  max_leverage: [2.0, 4.0]
+  max_leverage: [2.0, 5.0]

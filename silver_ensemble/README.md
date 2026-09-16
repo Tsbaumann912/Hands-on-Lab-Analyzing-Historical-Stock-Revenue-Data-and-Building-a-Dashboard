@@ -66,3 +66,4 @@ silver_ensemble/
 - Default account size for institutional WFO: **$350,000,000**; gate max DD **< 30%**.
 - CLI: `validate-wfo --start 2008-01-01` runs anchored + rolling walk-forward.
 - CLI: `optimize --start 2008-01-01` maximizes average calendar-year return under the DD gate.
+- Position sizing: **uncapped** `max_position_size_pct` (leverage / contracts / vol-target bind).

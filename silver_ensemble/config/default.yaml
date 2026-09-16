@@ -14,39 +14,39 @@ ensemble:
   - 126
   - 252
   weights:
-    tsmom: 0.281
-    carry: 0.072
-    basis_mom: 0.111
-    inventory: 0.322
-    fade: 0.036
-    stoch_ma: 0.178
+    tsmom: 0.361
+    carry: 0.245
+    basis_mom: 0.054
+    inventory: 0.143
+    fade: 0.106
+    stoch_ma: 0.091
   forecast_cap: 20.0
-  agreement_min: 0.446
-  fdm_cap: 1.623
-  vol_target_annual: 0.059
+  agreement_min: 0.566
+  fdm_cap: 2.368
+  vol_target_annual: 0.084
   ewma_vol_com_days: 60
-  fade_z: 2.836
-  buffer_forecast: 4.807
-  kelly_fraction: 0.369
+  fade_z: 2.702
+  buffer_forecast: 1.797
+  kelly_fraction: 0.279
   inventory_sma: 60
   inventory_delta_days: 20
   basis_mom_lookback: 63
   price_z_lookback: 20
   ratio_lookback: 63
   atr_period: 14
-  stop_atr_mult: 2.515
-  take_profit_atr_mult: 5.592
-  rsi_period: 12
-  stoch_rsi_period: 10
+  stop_atr_mult: 3.493
+  take_profit_atr_mult: 4.69
+  rsi_period: 13
+  stoch_rsi_period: 16
   stoch_rsi_smooth: 3
-  ma_fast: 15
-  ma_slow: 71
-  stoch_oversold: 0.281
-  stoch_overbought: 0.784
+  ma_fast: 17
+  ma_slow: 59
+  stoch_oversold: 0.121
+  stoch_overbought: 0.737
 risk:
   max_daily_drawdown_pct: 0.29
-  max_position_size_pct: 0.05
-  max_leverage: 2.088
+  max_position_size_pct: 100.0
+  max_leverage: 4.302
   max_contracts: 2500
   halt_on_breach: true
 portfolio:
@@ -69,27 +69,6 @@ validation:
   require_both_modes: true
 optimization:
   objective: maximize_avg_calendar_year_return
-  constraint: max_drawdown < 0.30
-  applied_params:
-    vol_target_annual: 0.05856203507805325
-    kelly_fraction: 0.36855542218675974
-    agreement_min: 0.4461554864498036
-    buffer_forecast: 4.806698771074186
-    fade_z: 2.835922812053061
-    stop_atr_mult: 2.5154114967756263
-    take_profit_atr_mult: 5.591853918227708
-    fdm_cap: 1.6232802919992873
-    ma_fast: 15.0
-    ma_slow: 71.0
-    rsi_period: 12.0
-    stoch_rsi_period: 10.0
-    stoch_oversold: 0.2805499539809553
-    stoch_overbought: 0.7841689963360206
-    max_leverage: 2.0884964493792033
-    weights:
-      tsmom: 0.2820001560794683
-      carry: 0.07224570063598162
-      basis_mom: 0.11071262948391374
-      inventory: 0.32175908220934646
-      fade: 0.035574083328695015
-      stoch_ma: 0.17770834826259474
+  constraint: max_drawdown < 0.30 (search used 0.20 headroom for WFO)
+  max_position_size_pct: uncapped (100.0)
+  n_trials: 100

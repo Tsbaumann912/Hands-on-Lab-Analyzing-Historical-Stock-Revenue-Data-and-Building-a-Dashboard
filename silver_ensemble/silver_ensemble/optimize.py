@@ -52,13 +52,17 @@ def apply_trial_params(base: Config, params: Mapping[str, Any]) -> Config:
     )
     risk = replace(
         base.risk,
-        # Position size is fixed at config value (5% / 0.05) — not searched
-        max_position_size_pct=float(base.risk.max_position_size_pct),
+        # No max-position-size cap — sizing limited by leverage / max_contracts / vol target
+        max_position_size_pct=float(
+            params.get("max_position_size_pct", max(base.risk.max_position_size_pct, 100.0))
+        ),
         max_leverage=float(params.get("max_leverage", base.risk.max_leverage)),
         max_daily_drawdown_pct=float(
             params.get("max_daily_drawdown_pct", min(0.29, base.risk.max_daily_drawdown_pct))
         ),
     )
+    # Always uncap position % (user request); keep other risk knobs searchable
+    risk = replace(risk, max_position_size_pct=100.0)
     return replace(base, ensemble=ens, risk=risk)
 
 
@@ -264,8 +268,8 @@ def write_optimized_yaml(
     for key in ("max_leverage", "max_daily_drawdown_pct"):
         if key in best_params:
             risk[key] = float(best_params[key])
-    # Fixed by request: 5% of equity
-    risk["max_position_size_pct"] = 0.05
+    # Uncapped position size (leverage / max_contracts / vol-target bind instead)
+    risk["max_position_size_pct"] = 100.0
     # Keep halt inside 30% gate
     risk["max_daily_drawdown_pct"] = min(float(risk.get("max_daily_drawdown_pct", 0.29)), 0.29)
     risk["halt_on_breach"] = True

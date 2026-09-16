@@ -84,9 +84,9 @@ Objective: **maximize average calendar-year equity return** subject to
 `config/optuna.yaml`).
 
 Tunable knobs: sleeve weights (incl. `stoch_ma`), MA/StochRSI periods, vol target, Kelly fraction,
-agreement/buffer/fade thresholds, ATR stops, leverage caps. **`max_position_size_pct` is fixed at
-0.05 (5% of equity)**. Circuit-breaker halt is set to 29% so realised max DD stays strictly below
-the 30% gate.
+agreement/buffer/fade thresholds, ATR stops, leverage caps. **`max_position_size_pct` is uncapped
+(100.0)** — sizing is limited by vol-target, leverage, and `max_contracts`. Circuit-breaker halt is
+set to 29% so realised max DD stays strictly below the 30% gate.
 
 CLI:
 
