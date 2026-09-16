@@ -82,18 +82,26 @@ class RiskManager:
         self._trading_halted: bool = False
         self._halt_reason: Optional[str] = None
         self._atr_cache: Dict[str, float] = {}   # symbol → latest ATR
+        self._ref_price_override: Optional[float] = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def evaluate(self, signal: Signal) -> RiskDecision:
+    def evaluate(self, signal: Signal, ref_price: Optional[float] = None) -> RiskDecision:
         """
         Evaluate a strategy signal against all risk rules.
 
         Returns a ``RiskDecision`` with ``approved=True`` only if *all*
         hard limits are satisfied. Soft violations are noted but do not
         block execution.
+
+        Parameters
+        ----------
+        ref_price:
+            Optional live/bar price used for notional sizing. Preferred over
+            signal metadata when provided.
         """
         violations: List[RiskViolation] = []
+        self._ref_price_override = ref_price
 
         # ── Rule 1: Trading halt circuit breaker ──────────────────────────────
         if self._trading_halted:
@@ -222,10 +230,20 @@ class RiskManager:
         qty = risk_per_trade / (stop_distance * contract_multiplier)
         return max(1.0, round(qty, 0))
 
-    @staticmethod
-    def _current_price(signal: Signal) -> float:
-        """Extract a reference price from the signal metadata, defaulting to 0."""
-        return float(signal.metadata.get("price", signal.metadata.get("close", 1.0)))
+    def _current_price(self, signal: Signal) -> float:
+        """Prefer bar override, then signal metadata; never default to $1."""
+        if self._ref_price_override is not None and self._ref_price_override > 0:
+            return float(self._ref_price_override)
+        for key in ("price", "close", "atr"):
+            # atr is last-resort scale only — skip for sizing
+            if key == "atr":
+                continue
+            if key in signal.metadata and signal.metadata[key] is not None:
+                val = float(signal.metadata[key])
+                if val > 0:
+                    return val
+        # Last resort: avoid $1 ghost price that oversizes CL (mult=1000).
+        return 100.0
 
     def _apply_default_stops(self, signal: Signal, qty: float) -> Signal:
         """Return a new Signal with stop/TP populated from ATR defaults if absent."""

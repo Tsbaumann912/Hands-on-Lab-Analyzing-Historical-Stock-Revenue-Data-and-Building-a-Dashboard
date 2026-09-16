@@ -46,7 +46,12 @@ def compute_metrics(
     # ── Basic return stats ─────────────────────────────────────────────────
     total_return = (eq[-1] - eq[0]) / eq[0]
     n_years = len(returns) / periods_per_year
-    cagr = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0.0
+    if n_years > 0 and (1.0 + total_return) > 0.0:
+        cagr = (1.0 + total_return) ** (1.0 / n_years) - 1.0
+    elif n_years > 0 and total_return <= -1.0:
+        cagr = -1.0
+    else:
+        cagr = 0.0
 
     # ── Risk-adjusted return ───────────────────────────────────────────────
     rf_period = (1 + risk_free_rate) ** (1 / periods_per_year) - 1
@@ -68,6 +73,11 @@ def compute_metrics(
     cummax = np.maximum.accumulate(eq)
     drawdowns = np.where(cummax > 0, (eq - cummax) / cummax, 0.0)
     max_drawdown = drawdowns.min()
+
+    # Ulcer Index: RMS of percentage drawdowns (Martin & McCann).
+    # Drawdowns are ≤ 0; square removes the sign.
+    ulcer_index = float(np.sqrt(np.mean(drawdowns * drawdowns)))
+    ulcer_performance_index = float(cagr / (ulcer_index + 1e-9))
 
     calmar = cagr / (abs(max_drawdown) + 1e-9)
 
@@ -91,6 +101,8 @@ def compute_metrics(
         "sharpe_ratio": round(float(sharpe), 4),
         "sortino_ratio": round(float(sortino), 4),
         "max_drawdown": round(float(max_drawdown), 6),
+        "ulcer_index": round(ulcer_index, 6),
+        "ulcer_performance_index": round(ulcer_performance_index, 4),
         "calmar_ratio": round(float(calmar), 4),
         "win_rate": round(float(win_rate), 4),
         "avg_win": round(float(avg_win), 6),

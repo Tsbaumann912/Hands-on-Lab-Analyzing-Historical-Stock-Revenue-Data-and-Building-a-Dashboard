@@ -33,6 +33,32 @@ strategy:
   exit_z_score: 0.5
   lookback: 50
   signal_strength_scaling: true
+  # CL energy risk-premia (see docs/CL_RESEARCH.md)
+  carry_back_month: 3
+  carry_basis_lookback: 63
+  carry_strength_atr_mult: 1.0
+  carry_mom_lookback: 10
+  carry_mom_z_max: 2.0
+  fast_ma_period: 20
+  slow_ma_period: 50
+  stoch_rsi_period: 14
+  stoch_rsi_stoch_period: 14
+  stoch_rsi_k: 3
+  stoch_rsi_d: 3
+  stoch_rsi_oversold: 20.0
+  stoch_rsi_overbought: 80.0
+  tsmom_horizon_short: 20
+  tsmom_horizon_med: 60
+  tsmom_horizon_long: 120
+  tsmom_z_cap: 3.0
+  vol_target_annual: 0.12
+  ewma_vol_com: 60.0
+  reaction_b: 1.0
+  vol_target_leverage_cap: 2.0
+  inventory_enabled: true
+  inventory_sma: 60
+  inventory_expect_window: 8
+  inventory_confirm_scale: true
 
 risk:
   max_daily_drawdown_pct: 0.03    # 3% daily drawdown circuit breaker
@@ -93,6 +119,31 @@ analysis:
   in_sample_ratio: 0.70
   walk_forward_trials: 25
   walk_forward_timeout_seconds: 90
+
+# ── CL anchored / rolling WFO validation (scripts/validate_cl_wfo.py) ─────────
+cl_validation:
+  start_date: "2008-01-01"
+  capital: 350000000.0
+  strategy: CLCarryMomentum
+  anchored_min_is_years: 3.0
+  oos_years: 1.0
+  step_years: 1.0
+  rolling_is_years: 5.0
+  rolling_oos_years: 1.0
+  purge_bars: 5
+  n_trials: 25
+  timeout_seconds: 120
+  max_dd_limit: 0.30
+  min_sharpe: 0.0
+  min_upi: 0.0
+  min_cagr: 0.0
+  risk_max_daily_drawdown_pct: 0.99
+  risk_halt_on_breach: false
+  risk_max_position_size_pct: 0.10
+  risk_max_leverage: 10.0
+  periods_per_year: 252
+  metrics_risk_free_rate: 0.0
+  oos_warmup_bars: 320
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

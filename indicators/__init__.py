@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from indicators.momentum import rsi, macd, stochastic_oscillator
+from indicators.momentum import rsi, macd, stochastic_oscillator, stochastic_rsi
 from indicators.trend import sma, ema, wma, supertrend
 from indicators.volatility import atr, bollinger_bands, historical_volatility, keltner_channels
 from indicators.volume import obv, vwap, volume_oscillator
@@ -12,6 +12,7 @@ __all__ = [
     "rsi",
     "macd",
     "stochastic_oscillator",
+    "stochastic_rsi",
     # trend
     "sma",
     "ema",
