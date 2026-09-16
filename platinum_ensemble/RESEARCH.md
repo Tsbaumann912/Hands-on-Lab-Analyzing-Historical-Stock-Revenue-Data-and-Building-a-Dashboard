@@ -31,6 +31,8 @@ This package implements a CTA-style platinum algorithm that is **not** part of Q
 - Forecast diversification multiplier (FDM).
 - EWMA volatility targeting + fractional Kelly + hard contract/leverage caps.
 - Promotion: ablation, purged walk-forward, Deflated Sharpe.
+- Institutional WFO: **anchored** (expanding IS from origin) + **rolling** (fixed IS/OOS slide);
+  stitched OOS gated on Sharpe, Ulcer Performance Index, CAGR, and Max DD &lt; 30% at `$350M`.
 
 ## Run
 
@@ -40,4 +42,5 @@ pip install -e .
 pytest -q
 python -m platinum_ensemble.cli backtest --synthetic --plot-summary
 python -m platinum_ensemble.cli validate --synthetic
+python -m platinum_ensemble.cli wfo --start 2008-01-01 --cash 350000000
 ```

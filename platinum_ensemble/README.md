@@ -26,7 +26,13 @@ pip install -r requirements.txt
 pytest -q
 python -m platinum_ensemble.cli backtest --synthetic --plot-summary
 python -m platinum_ensemble.cli validate --synthetic
+python -m platinum_ensemble.cli wfo --start 2008-01-01 --cash 350000000
+python scripts/eda_research.py
 ```
+
+Institutional WFO (`wfo`) runs **anchored** and **rolling** walk-forward on PL from
+`validation.data_start` (default 2008-01-01) at `$350M`, and gates stitched OOS on
+Sharpe &gt; 0, UPI &gt; 0, CAGR &gt; 0, and Max DD &lt; 30%.
 
 ## Layout
 
