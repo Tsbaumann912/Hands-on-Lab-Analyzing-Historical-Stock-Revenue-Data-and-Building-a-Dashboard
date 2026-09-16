@@ -1,0 +1,65 @@
+# Search bounds for nested purged walk-forward Optuna (IS-only).
+# Do not hardcode these in the optimizer — read from this file.
+# Keep the space small to limit multiple-testing risk.
+
+n_trials_per_window: 28
+n_windows: 6
+in_sample_ratio: 0.70
+purge_bars: 5
+# Penalise IS max drawdown above this when scoring trials
+max_dd_soft_cap: 0.25
+min_fills: 8
+
+agreement_min:
+  type: float
+  low: 0.10
+  high: 0.45
+
+buffer_forecast:
+  type: float
+  low: 0.5
+  high: 3.5
+
+vol_target_annual:
+  type: float
+  low: 0.08
+  high: 0.18
+
+kelly_fraction:
+  type: float
+  low: 0.20
+  high: 0.45
+
+stop_atr_mult:
+  type: float
+  low: 1.5
+  high: 3.5
+
+take_profit_atr_mult:
+  type: float
+  low: 2.5
+  high: 6.0
+
+fdm_cap:
+  type: float
+  low: 1.0
+  high: 2.5
+
+tsmom_weight:
+  type: float
+  low: 0.40
+  high: 0.75
+
+# When false, fade weight is redistributed to other sleeves.
+enable_fade:
+  type: categorical
+  choices: [true, false]
+
+# Multi-horizon TSMOM sets (days).
+horizon_set:
+  type: categorical
+  choices:
+    - [21, 63, 252]
+    - [10, 21, 63]
+    - [63, 126, 252]
+    - [21, 63, 126]

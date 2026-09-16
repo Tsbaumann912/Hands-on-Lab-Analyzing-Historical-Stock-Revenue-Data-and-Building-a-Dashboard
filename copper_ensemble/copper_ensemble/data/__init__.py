@@ -120,16 +120,33 @@ def make_synthetic_hg(
     return df
 
 
-def load_yfinance_hg(ticker: str = "HG=F", period: str = "5y") -> pd.DataFrame:
-    """Load HG continuous proxy from Yahoo Finance; synthesise curve/inventory proxies."""
+def load_yfinance_hg(
+    ticker: str = "HG=F",
+    period: str | None = "5y",
+    start: str | None = None,
+    end: str | None = None,
+) -> pd.DataFrame:
+    """
+    Load HG continuous proxy from Yahoo Finance; synthesise curve/inventory proxies.
+
+    Prefer ``start``/``end`` (YYYY-MM-DD) when provided; otherwise use ``period``.
+    """
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover
         raise ImportError("yfinance is required for live HG download") from exc
 
-    raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+    kwargs: dict = {"auto_adjust": True, "progress": False}
+    if start is not None:
+        kwargs["start"] = start
+        if end is not None:
+            kwargs["end"] = end
+    else:
+        kwargs["period"] = period or "5y"
+
+    raw = yf.download(ticker, **kwargs)
     if raw.empty:
-        raise RuntimeError(f"no data returned for {ticker}")
+        raise RuntimeError(f"no data returned for {ticker} ({kwargs})")
 
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = [c[0].lower() for c in raw.columns]
@@ -138,7 +155,7 @@ def load_yfinance_hg(ticker: str = "HG=F", period: str = "5y") -> pd.DataFrame:
 
     df = raw[["open", "high", "low", "close", "volume"]].dropna().copy()
     close = df["close"].to_numpy(dtype=np.float64)
-    # Proxy curve: roll estimate from 20d drift vs realized — mild synthetic basis
+    # Proxy curve: roll estimate from returns — not a true nearby/deferred curve
     rets = pd.Series(close).pct_change().fillna(0.0).to_numpy()
     basis = pd.Series(rets).rolling(63).mean().fillna(0.0).to_numpy()
     df["near_price"] = close
@@ -149,7 +166,16 @@ def load_yfinance_hg(ticker: str = "HG=F", period: str = "5y") -> pd.DataFrame:
     )
     df["inventory"] = (100_000.0 - 10_000.0 * z.fillna(0.0)).to_numpy()
     df["china_pmi"] = 50.0
-    usd = yf.download("DX-Y.NYB", period=period, auto_adjust=True, progress=False)
+
+    usd_kwargs = {"auto_adjust": True, "progress": False}
+    if start is not None:
+        usd_kwargs["start"] = start
+        if end is not None:
+            usd_kwargs["end"] = end
+    else:
+        usd_kwargs["period"] = period or "5y"
+
+    usd = yf.download("DX-Y.NYB", **usd_kwargs)
     if not usd.empty:
         u = usd["Close"] if "Close" in usd.columns else usd.iloc[:, 0]
         if isinstance(u, pd.DataFrame):
@@ -222,6 +248,18 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
     with np.errstate(divide="ignore", invalid="ignore"):
         basis = np.log(np.clip(near, 1e-12, None)) - np.log(np.clip(nxt, 1e-12, None))
 
+    from copper_ensemble.forecasts import sma, stochastic_rsi
+
+    ma_fast = sma(close, config.ensemble.fast_ma_period)
+    ma_slow = sma(close, config.ensemble.slow_ma_period)
+    _stoch_raw, stoch_k, stoch_d = stochastic_rsi(
+        close,
+        config.ensemble.rsi_period,
+        config.ensemble.stoch_rsi_period,
+        config.ensemble.stoch_rsi_smooth_k,
+        config.ensemble.stoch_rsi_smooth_d,
+    )
+
     return {
         "close": close,
         "high": high,
@@ -236,4 +274,8 @@ def build_feature_matrix(bars: list[Bar], config: Config) -> dict[str, np.ndarra
         "atr": atr_vals,
         "carry": carry,
         "basis": basis,
+        "ma_fast": ma_fast,
+        "ma_slow": ma_slow,
+        "stoch_rsi_k": stoch_k,
+        "stoch_rsi_d": stoch_d,
     }
