@@ -378,7 +378,20 @@ def run_institutional_wfo(
         f"Account size ${initial:,.0f}",
         f"Bars={len(bars)} from {data_start} to {data_end}",
         "Daily DD halt disabled for institutional path evaluation",
+        "Evaluation WFO (fixed YAML params — IS is not re-optimised)",
     ]
+    # With matching IS length / OOS / step, OOS calendars coincide; IS paths still differ.
+    if (
+        bt.anchored_initial_is_bars == bt.rolling_is_bars
+        and bt.oos_bars == bt.rolling_step_bars
+        and a_windows
+        and r_windows
+        and len(a_windows) == len(r_windows)
+    ):
+        notes.append(
+            "Note: under default IS=756 / OOS=step=252, anchored and rolling share "
+            "the same OOS calendar; stitched OOS metrics match when params are fixed."
+        )
     if overall:
         notes.append("Overall PASS: both anchored and rolling stitched OOS gates met")
     else:
