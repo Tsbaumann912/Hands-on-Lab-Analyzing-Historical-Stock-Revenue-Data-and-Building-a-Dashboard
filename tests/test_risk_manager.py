@@ -169,6 +169,37 @@ class TestMaxOpenPositions:
         assert decision.approved is True
 
 
+class TestPositionSizeCap:
+    def test_notional_cap_scales_qty(self, default_config: Config):
+        config = Config()
+        config.risk.max_position_size_pct = 0.10
+        config.risk.max_daily_drawdown_pct = 0.99
+        config.risk.halt_on_breach = False
+        portfolio = Portfolio(config)
+        risk_mgr = RiskManager(config, portfolio)
+        risk_mgr.update_atr("ES.c.0", 1.0)  # tiny ATR → huge Kelly qty
+        sig = _signal(stop_loss=4499.0, take_profit=4600.0)
+        decision = risk_mgr.evaluate(sig, ref_price=4500.0)
+        assert decision.approved is True
+        max_notional = 100_000.0 * 0.10
+        max_qty = max_notional / (4500.0 * 50.0)
+        assert decision.suggested_quantity <= max(1.0, max_qty) + 1e-6
+
+    def test_zero_pct_leaves_kelly_uncapped(self, default_config: Config):
+        config = Config()
+        config.risk.max_position_size_pct = 0.0  # uncapped
+        config.risk.max_daily_drawdown_pct = 0.99
+        config.risk.halt_on_breach = False
+        portfolio = Portfolio(config)
+        risk_mgr = RiskManager(config, portfolio)
+        risk_mgr.update_atr("ES.c.0", 1.0)
+        sig = _signal(stop_loss=4490.0, take_profit=4600.0)
+        decision = risk_mgr.evaluate(sig, ref_price=4500.0)
+        assert decision.approved is True
+        # 1% equity risk / (10pt * 50 mult) = 100000*0.01 / 500 = 2 contracts
+        assert decision.suggested_quantity >= 2.0
+
+
 class TestDefaultStopApplication:
     def test_stop_applied_when_missing(self, risk_mgr: RiskManager):
         sig = _signal(stop_loss=None, take_profit=None)

@@ -45,3 +45,94 @@ sma_long:
   type: int
   low: 30
   high: 200
+
+# ── CL energy risk-premia search bounds ───────────────────────────────────────
+carry_back_month:
+  type: int
+  low: 2
+  high: 6
+
+carry_basis_lookback:
+  type: int
+  low: 21
+  high: 126
+
+carry_strength_atr_mult:
+  type: float
+  low: 0.5
+  high: 2.5
+
+carry_mom_lookback:
+  type: int
+  low: 5
+  high: 30
+
+carry_mom_z_max:
+  type: float
+  low: 1.0
+  high: 4.0
+
+fast_ma_period:
+  type: int
+  low: 5
+  high: 30
+
+slow_ma_period:
+  type: int
+  low: 30
+  high: 100
+
+stoch_rsi_period:
+  type: int
+  low: 7
+  high: 21
+
+stoch_rsi_stoch_period:
+  type: int
+  low: 7
+  high: 21
+
+stoch_rsi_oversold:
+  type: float
+  low: 10.0
+  high: 30.0
+
+stoch_rsi_overbought:
+  type: float
+  low: 70.0
+  high: 90.0
+
+tsmom_horizon_short:
+  type: int
+  low: 10
+  high: 40
+
+tsmom_horizon_med:
+  type: int
+  low: 40
+  high: 90
+
+tsmom_horizon_long:
+  type: int
+  low: 90
+  high: 180
+
+vol_target_annual:
+  type: float
+  low: 0.08
+  high: 0.20
+
+reaction_b:
+  type: float
+  low: 0.5
+  high: 3.0
+
+inventory_sma:
+  type: int
+  low: 20
+  high: 120
+
+inventory_expect_window:
+  type: int
+  low: 4
+  high: 16

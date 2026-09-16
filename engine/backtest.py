@@ -23,7 +23,7 @@ from core.config import Config
 from core.enums import Direction, OrderType
 from core.models import Bar, Fill, Order, Signal
 from engine.metrics import compute_metrics
-from portfolio.portfolio import Portfolio
+from portfolio.portfolio import Portfolio, Position
 from risk.risk_manager import RiskManager
 from strategies.base import Strategy
 
@@ -105,13 +105,24 @@ class BacktestEngine:
 
         for _ts, symbol, bar in timeline:
             signal = strategy.update(bar)
+            pos = portfolio.open_positions.get(symbol)
 
             if signal.direction != Direction.FLAT:
-                risk_decision = risk_mgr.evaluate(signal)
+                # Align on signed quantity so a stale Position.direction cannot
+                # trigger repeated flip-sizing (doubling each bar).
+                if self._is_aligned(pos, signal.direction):
+                    portfolio.mark_to_market({symbol: bar.close}, bar.timestamp)
+                    continue
+
+                risk_decision = risk_mgr.evaluate(signal, ref_price=bar.close)
                 if risk_decision.approved:
+                    qty = float(risk_decision.suggested_quantity)
+                    # Flatten opposite exposure then enter target size.
+                    if self._is_opposite(pos, signal.direction):
+                        qty = abs(pos.quantity) + qty
                     order = self._signal_to_order(
                         risk_decision.adjusted_signal,
-                        risk_decision.suggested_quantity,
+                        qty,
                         bar.close,
                     )
                     fill = broker.submit_order(order)
@@ -119,7 +130,6 @@ class BacktestEngine:
                         portfolio.process_fill(fill)
                         strategy.set_position(symbol, signal.direction)
             elif signal.direction == Direction.FLAT:
-                pos = portfolio.open_positions.get(symbol)
                 if pos is not None:
                     close_order = Order(
                         symbol=symbol,
@@ -140,6 +150,7 @@ class BacktestEngine:
         eq_array = np.array([s.total_equity for s in eq_snapshots], dtype=np.float64)
         metrics = compute_metrics(
             eq_array,
+            risk_free_rate=float(getattr(self._config.backtest, "risk_free_rate", 0.05)),
             periods_per_year=self._periods_per_year(timeline),
         )
 
@@ -151,6 +162,24 @@ class BacktestEngine:
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_aligned(pos: Optional[Position], direction: Direction) -> bool:
+        if pos is None or abs(float(pos.quantity)) < 1e-9:
+            return False
+        qty = float(pos.quantity)
+        if qty > 0:
+            return direction == Direction.LONG
+        return direction == Direction.SHORT
+
+    @staticmethod
+    def _is_opposite(pos: Optional[Position], direction: Direction) -> bool:
+        if pos is None or abs(float(pos.quantity)) < 1e-9:
+            return False
+        qty = float(pos.quantity)
+        if qty > 0:
+            return direction == Direction.SHORT
+        return direction == Direction.LONG
 
     @staticmethod
     def _build_timeline(bars: Dict[str, List[Bar]]) -> List[tuple]:

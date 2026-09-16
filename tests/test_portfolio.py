@@ -144,6 +144,25 @@ class TestShortPosition:
         # Short gain = (4500 - 4400) * 1 * 50 = 5000
         assert abs(portfolio.unrealised_pnl - 5000.0) < 0.01
 
+    def test_reverse_through_flat_updates_direction(self, portfolio: Portfolio):
+        """Flip must refresh direction + entry or backtest doubles size every bar."""
+        portfolio.process_fill(
+            _fill(direction=Direction.SHORT, qty=10.0, price=4500.0, commission=0.0)
+        )
+        # Close 10 short + open 5 long in one fill (qty = abs(old) + new)
+        portfolio.process_fill(
+            _fill(direction=Direction.LONG, qty=15.0, price=4400.0, commission=0.0)
+        )
+        pos = portfolio.open_positions.get("ES.c.0")
+        assert pos is not None
+        assert pos.direction == Direction.LONG
+        assert abs(pos.quantity - 5.0) < 1e-9
+        assert abs(pos.avg_entry_price - 4400.0) < 1e-9
+        # Short PnL: (4500 - 4400) * 10 * 50 = 50_000 credited to cash
+        assert abs(portfolio.cash - (100_000.0 + 50_000.0)) < 1.0
+        portfolio.mark_to_market({"ES.c.0": 4410.0}, _ts(1))
+        assert abs(portfolio.unrealised_pnl - (10.0 * 5.0 * 50.0)) < 0.01
+
 
 # ── Test: Drawdown tracking ───────────────────────────────────────────────────
 
