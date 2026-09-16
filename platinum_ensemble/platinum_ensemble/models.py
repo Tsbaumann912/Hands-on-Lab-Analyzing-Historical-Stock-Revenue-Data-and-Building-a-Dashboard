@@ -108,13 +108,21 @@ class BacktestConfig:
     walk_forward_windows: int
     in_sample_ratio: float
     purge_bars: int
+    anchored_initial_is_bars: int = 756
+    oos_bars: int = 252
+    rolling_is_bars: int = 756
+    rolling_step_bars: int = 252
 
 
 @dataclass(frozen=True)
 class ValidationConfig:
     dsr_pass_threshold: float
     oos_retention_min: float
-
+    max_oos_drawdown: float = 0.30
+    min_oos_sharpe: float = 0.0
+    min_oos_cagr: float = 0.0
+    min_oos_upi: float = 0.0
+    data_start: str = "2008-01-01"
 
 @dataclass(frozen=True)
 class Config:
@@ -193,10 +201,19 @@ def load_config(path: str | Path | None = None) -> Config:
             walk_forward_windows=int(b["walk_forward_windows"]),
             in_sample_ratio=float(b["in_sample_ratio"]),
             purge_bars=int(b["purge_bars"]),
+            anchored_initial_is_bars=int(b.get("anchored_initial_is_bars", 756)),
+            oos_bars=int(b.get("oos_bars", 252)),
+            rolling_is_bars=int(b.get("rolling_is_bars", 756)),
+            rolling_step_bars=int(b.get("rolling_step_bars", 252)),
         ),
         validation=ValidationConfig(
             dsr_pass_threshold=float(v["dsr_pass_threshold"]),
             oos_retention_min=float(v["oos_retention_min"]),
+            max_oos_drawdown=float(v.get("max_oos_drawdown", 0.30)),
+            min_oos_sharpe=float(v.get("min_oos_sharpe", 0.0)),
+            min_oos_cagr=float(v.get("min_oos_cagr", 0.0)),
+            min_oos_upi=float(v.get("min_oos_upi", 0.0)),
+            data_start=str(v.get("data_start", "2008-01-01")),
         ),
         raw=raw,
     )

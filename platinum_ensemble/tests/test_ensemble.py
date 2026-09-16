@@ -48,6 +48,11 @@ def test_config_loads() -> None:
     assert cfg.contract.multiplier == 50.0
     assert abs(sum(cfg.ensemble.weights.values()) - 1.0) < 1e-9
     assert "pl_gc_rv" in cfg.ensemble.weights
+    assert cfg.portfolio.initial_cash == 350_000_000.0
+    assert cfg.risk.max_contracts == 10_000
+    assert cfg.backtest.anchored_initial_is_bars == 756
+    assert cfg.validation.max_oos_drawdown == 0.30
+    assert cfg.validation.data_start == "2008-01-01"
 
 
 def test_tsmom_signs_on_trending_series() -> None:
@@ -144,3 +149,89 @@ def test_notional_uses_pl_multiplier() -> None:
     cfg = load_config(ROOT / "config" / "default.yaml")
     assert cfg.contract.multiplier == 50.0
     assert cfg.contract.tick_value == 5.0
+
+
+def test_metrics_include_cagr_ulcer_upi() -> None:
+    from platinum_ensemble.engine import _compute_metrics
+
+    equity = np.cumprod(1.0 + np.full(500, 0.001)) * 350_000_000.0
+    m = _compute_metrics(equity)
+    assert "cagr" in m and m["cagr"] > 0
+    assert "ulcer_index" in m
+    assert "upi" in m
+    assert m["max_drawdown"] >= 0.0
+
+
+def test_anchored_wfo_expands_from_origin() -> None:
+    from platinum_ensemble.engine import BacktestEngine
+    from platinum_ensemble.validation import anchored_walk_forward
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_pl(2200, seed=11), "PL")
+    engine = BacktestEngine(cfg)
+    windows, eqs = anchored_walk_forward(
+        engine,
+        bars,
+        initial_is_bars=756,
+        oos_bars=252,
+        purge=5,
+    )
+    assert len(windows) >= 2
+    assert all(w.is_start == 0 for w in windows)
+    # Expanding IS ends
+    is_ends = [w.is_end for w in windows]
+    assert is_ends == sorted(is_ends)
+    assert is_ends[0] == 756
+    assert is_ends[1] == 756 + 252
+    assert len(eqs) == len(windows)
+
+
+def test_rolling_wfo_fixed_is_length() -> None:
+    from platinum_ensemble.engine import BacktestEngine
+    from platinum_ensemble.validation import rolling_walk_forward
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_pl(2200, seed=12), "PL")
+    engine = BacktestEngine(cfg)
+    windows, eqs = rolling_walk_forward(
+        engine,
+        bars,
+        is_bars=756,
+        oos_bars=252,
+        step_bars=252,
+        purge=5,
+    )
+    assert len(windows) >= 2
+    assert all((w.is_end - w.is_start) == 756 for w in windows)
+    assert windows[1].is_start == windows[0].is_start + 252
+    assert len(eqs) == len(windows)
+
+
+def test_max_dd_gate_fails_when_breached() -> None:
+    from platinum_ensemble.validation import evaluate_stitched_gates
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    metrics = {
+        "sharpe": 1.0,
+        "cagr": 0.10,
+        "upi": 1.0,
+        "max_drawdown": 0.35,
+    }
+    passed, notes = evaluate_stitched_gates(metrics, cfg)
+    assert passed is False
+    assert any("Max DD" in n for n in notes)
+
+
+def test_institutional_wfo_uses_350m() -> None:
+    from platinum_ensemble.validation import run_institutional_wfo
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_pl(2200, seed=13), "PL")
+    report = run_institutional_wfo(cfg, bars, cash=350_000_000.0)
+    assert report.account_size == 350_000_000.0
+    assert report.anchored.stitched_equity[0] == pytest.approx(350_000_000.0)
+    assert "sharpe" in report.anchored.stitched_metrics
+    assert "upi" in report.anchored.stitched_metrics
+    assert "cagr" in report.rolling.stitched_metrics
+    assert report.anchored.mode == "anchored"
+    assert report.rolling.mode == "rolling"

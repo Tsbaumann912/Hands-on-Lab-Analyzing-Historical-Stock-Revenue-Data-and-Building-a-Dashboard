@@ -128,14 +128,23 @@ def load_yfinance_pl(
     ticker: str = "PL=F",
     gold_ticker: str = "GC=F",
     period: str = "5y",
+    start: Optional[str] = None,
+    end: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Load PL continuous proxy from Yahoo; join gold and synthesise curve/inventory."""
+    """Load PL continuous proxy from Yahoo; join gold and synthesise curve/inventory.
+
+    Prefer ``start``/``end`` (e.g. ``2008-01-01``) for institutional WFO.
+    If ``start`` is set, ``period`` is ignored.
+    """
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover
         raise ImportError("yfinance is required for live PL download") from exc
 
-    raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+    if start is not None:
+        raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
+    else:
+        raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
     if raw.empty:
         raise RuntimeError(f"no data returned for {ticker}")
 
@@ -156,7 +165,13 @@ def load_yfinance_pl(
     )
     df["inventory"] = (80_000.0 - 8_000.0 * z.fillna(0.0)).to_numpy()
 
-    gold = yf.download(gold_ticker, period=period, auto_adjust=True, progress=False)
+    if start is not None:
+        gold = yf.download(gold_ticker, start=start, end=end, auto_adjust=True, progress=False)
+        usd = yf.download("DX-Y.NYB", start=start, end=end, auto_adjust=True, progress=False)
+    else:
+        gold = yf.download(gold_ticker, period=period, auto_adjust=True, progress=False)
+        usd = yf.download("DX-Y.NYB", period=period, auto_adjust=True, progress=False)
+
     if not gold.empty:
         g = gold["Close"] if "Close" in gold.columns else gold.iloc[:, 0]
         if isinstance(g, pd.DataFrame):
@@ -169,7 +184,6 @@ def load_yfinance_pl(
         df["gold_ret_20d"] = 0.0
     df["gold_ret_20d"] = df["gold_ret_20d"].fillna(0.0)
 
-    usd = yf.download("DX-Y.NYB", period=period, auto_adjust=True, progress=False)
     if not usd.empty:
         u = usd["Close"] if "Close" in usd.columns else usd.iloc[:, 0]
         if isinstance(u, pd.DataFrame):

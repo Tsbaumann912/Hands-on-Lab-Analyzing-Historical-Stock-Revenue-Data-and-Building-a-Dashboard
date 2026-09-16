@@ -32,21 +32,56 @@ class BacktestResult:
 
 
 def _compute_metrics(equity: np.ndarray) -> Dict[str, float]:
+    """Sharpe, Max DD, CAGR, Ulcer Index, and Ulcer Performance Index."""
+    empty = {
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "total_return": 0.0,
+        "cagr": 0.0,
+        "ulcer_index": 0.0,
+        "upi": 0.0,
+        "end_equity": float(equity[-1]) if equity.size else 0.0,
+        "n_bars": float(equity.size),
+    }
     if equity.size < 3:
-        return {"sharpe": 0.0, "max_drawdown": 0.0, "total_return": 0.0}
-    rets = np.diff(equity) / equity[:-1]
+        return empty
+
+    rets = np.diff(equity) / np.maximum(equity[:-1], 1e-12)
     rets = rets[np.isfinite(rets)]
     mu = float(np.mean(rets)) if rets.size else 0.0
     sd = float(np.std(rets, ddof=1)) if rets.size > 1 else 0.0
     sharpe = (mu / sd * np.sqrt(252.0)) if sd > 1e-12 else 0.0
+
     peak = np.maximum.accumulate(equity)
     dd = 1.0 - equity / np.maximum(peak, 1e-12)
+    max_dd = float(np.max(dd))
+
+    n = float(equity.size)
+    total_return = float(equity[-1] / equity[0] - 1.0)
+    # CAGR annualised on trading-day count
+    if equity[0] > 0 and n > 1 and equity[-1] > 0:
+        cagr = float((equity[-1] / equity[0]) ** (252.0 / (n - 1.0)) - 1.0)
+    elif equity[0] > 0 and n > 1 and equity[-1] <= 0:
+        cagr = -1.0
+    else:
+        cagr = 0.0
+
+    # Ulcer Index as fraction (same units as max_drawdown)
+    ulcer = float(np.sqrt(np.mean(dd * dd)))
+    if ulcer > 1e-12:
+        upi = float(cagr / ulcer)
+    else:
+        upi = float(cagr / 1e-12) if cagr > 0 else 0.0
+
     return {
         "sharpe": float(sharpe),
-        "max_drawdown": float(np.max(dd)),
-        "total_return": float(equity[-1] / equity[0] - 1.0),
+        "max_drawdown": max_dd,
+        "total_return": total_return,
+        "cagr": cagr,
+        "ulcer_index": ulcer,
+        "upi": upi,
         "end_equity": float(equity[-1]),
-        "n_bars": float(equity.size),
+        "n_bars": n,
     }
 
 

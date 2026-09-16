@@ -6,12 +6,17 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from platinum_ensemble.data import dataframe_to_bars, load_yfinance_pl, make_synthetic_pl
 from platinum_ensemble.engine import BacktestEngine
 from platinum_ensemble.models import load_config
-from platinum_ensemble.validation import validate_ensemble
+from platinum_ensemble.validation import (
+    institutional_report_to_dict,
+    run_institutional_wfo,
+    validate_ensemble,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("platinum_ensemble")
@@ -19,15 +24,25 @@ logger = logging.getLogger("platinum_ensemble")
 
 def _load_bars(args: argparse.Namespace):
     cfg = load_config(args.config)
-    if args.synthetic:
+    start = getattr(args, "start", None)
+    end = getattr(args, "end", None)
+    if getattr(args, "synthetic", False):
         df = make_synthetic_pl(n_days=args.days, seed=args.seed)
     else:
-        df = load_yfinance_pl(
-            cfg.contract.yfinance_ticker,
-            gold_ticker=cfg.ensemble.gold_ticker,
-            period=args.period,
-        )
+        kwargs = {
+            "ticker": cfg.contract.yfinance_ticker,
+            "gold_ticker": cfg.ensemble.gold_ticker,
+        }
+        if start:
+            kwargs["start"] = start
+            if end:
+                kwargs["end"] = end
+        else:
+            kwargs["period"] = getattr(args, "period", "5y")
+        df = load_yfinance_pl(**kwargs)
     bars = dataframe_to_bars(df, symbol=cfg.contract.symbol)
+    if getattr(args, "cash", None) is not None:
+        cfg = replace(cfg, portfolio=replace(cfg.portfolio, initial_cash=float(args.cash)))
     return cfg, bars
 
 
@@ -63,11 +78,43 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 "is_sharpe": w.is_sharpe,
                 "oos_sharpe": w.oos_sharpe,
                 "oos_max_dd": w.oos_max_dd,
+                "oos_cagr": w.oos_cagr,
+                "oos_upi": w.oos_upi,
             }
             for w in report.walk_forward
         ],
     }
     print(json.dumps(payload, indent=2))
+    return 0 if report.passed else 1
+
+
+def cmd_wfo(args: argparse.Namespace) -> int:
+    """Anchored + rolling institutional WFO ($350M default, 2008–now)."""
+    cfg = load_config(args.config)
+    start = args.start or cfg.validation.data_start
+    cash = float(args.cash) if args.cash is not None else cfg.portfolio.initial_cash
+
+    if args.synthetic:
+        df = make_synthetic_pl(n_days=args.days, seed=args.seed)
+    else:
+        df = load_yfinance_pl(
+            cfg.contract.yfinance_ticker,
+            gold_ticker=cfg.ensemble.gold_ticker,
+            start=start,
+            end=args.end,
+        )
+    bars = dataframe_to_bars(df, symbol=cfg.contract.symbol)
+    report = run_institutional_wfo(cfg, bars, cash=cash)
+    payload = institutional_report_to_dict(report)
+    print(json.dumps(payload, indent=2))
+    logger.info(
+        "WFO overall=%s | anchored=%s rolling=%s | account=$%.0f | bars=%d",
+        report.passed,
+        report.anchored.passed,
+        report.rolling.passed,
+        report.account_size,
+        report.n_bars,
+    )
     return 0 if report.passed else 1
 
 
@@ -84,6 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--days", type=int, default=1500)
     bt.add_argument("--seed", type=int, default=42)
     bt.add_argument("--period", default="5y")
+    bt.add_argument("--start", default=None)
+    bt.add_argument("--end", default=None)
+    bt.add_argument("--cash", type=float, default=None)
     bt.add_argument("--plot-summary", action="store_true")
     bt.set_defaults(func=cmd_backtest)
 
@@ -92,7 +142,23 @@ def build_parser() -> argparse.ArgumentParser:
     val.add_argument("--days", type=int, default=1500)
     val.add_argument("--seed", type=int, default=42)
     val.add_argument("--period", default="5y")
+    val.add_argument("--start", default=None)
+    val.add_argument("--end", default=None)
+    val.add_argument("--cash", type=float, default=None)
     val.set_defaults(func=cmd_validate)
+
+    wfo = sub.add_parser(
+        "wfo",
+        help="Anchored + rolling institutional WFO (Sharpe/UPI/CAGR/MaxDD gates)",
+    )
+    wfo.add_argument("--synthetic", action="store_true")
+    wfo.add_argument("--yfinance", action="store_true", help="Use Yahoo PL=F (default unless --synthetic)")
+    wfo.add_argument("--days", type=int, default=2500, help="Synthetic bar count")
+    wfo.add_argument("--seed", type=int, default=42)
+    wfo.add_argument("--start", default=None, help="Data start YYYY-MM-DD (default from config)")
+    wfo.add_argument("--end", default=None)
+    wfo.add_argument("--cash", type=float, default=None, help="Account size (default 350e6 from config)")
+    wfo.set_defaults(func=cmd_wfo)
     return p
 
 
