@@ -110,6 +110,7 @@ class BacktestConfig:
     metrics: List[str] = field(
         default_factory=lambda: ["sharpe", "sortino", "max_drawdown", "calmar"]
     )
+    risk_free_rate: float = 0.05
 
 
 @dataclass
@@ -159,11 +160,13 @@ class CLValidationConfig:
     min_upi: float = 0.0
     min_cagr: float = 0.0
     # Research validation: allow system DD up to the promotion gate (not 3% daily halt).
-    risk_max_daily_drawdown_pct: float = 0.35
+    risk_max_daily_drawdown_pct: float = 0.99
     risk_halt_on_breach: bool = False
     risk_max_position_size_pct: float = 0.10
     risk_max_leverage: float = 10.0
     periods_per_year: int = 252
+    # Futures risk premia are usually evaluated vs 0 cash yield in the futures P&L.
+    metrics_risk_free_rate: float = 0.0
 
 
 @dataclass

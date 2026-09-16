@@ -140,6 +140,7 @@ class BacktestEngine:
         eq_array = np.array([s.total_equity for s in eq_snapshots], dtype=np.float64)
         metrics = compute_metrics(
             eq_array,
+            risk_free_rate=float(getattr(self._config.backtest, "risk_free_rate", 0.05)),
             periods_per_year=self._periods_per_year(timeline),
         )
 

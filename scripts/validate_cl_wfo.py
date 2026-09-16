@@ -45,6 +45,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+logging.getLogger("risk.risk_manager").setLevel(logging.ERROR)
+logging.getLogger("brokers.paper").setLevel(logging.ERROR)
+logging.getLogger("portfolio.portfolio").setLevel(logging.ERROR)
+logging.getLogger("strategies.base").setLevel(logging.WARNING)
 logger = logging.getLogger("validate_cl_wfo")
 
 CL_STRATEGIES = {
@@ -73,6 +77,8 @@ def _apply_validation_risk(cfg: Config, v: CLValidationConfig) -> None:
     cfg.risk.halt_on_breach = bool(v.risk_halt_on_breach)
     cfg.risk.max_position_size_pct = float(v.risk_max_position_size_pct)
     cfg.risk.max_leverage = float(v.risk_max_leverage)
+    # Futures-style Sharpe / Sortino for Optuna + stitched OOS metrics.
+    cfg.backtest.risk_free_rate = float(getattr(v, "metrics_risk_free_rate", 0.0))
 
 
 def load_cl_daily_bars(

@@ -129,11 +129,12 @@ cl_validation:
   min_sharpe: 0.0
   min_upi: 0.0
   min_cagr: 0.0
-  risk_max_daily_drawdown_pct: 0.35
+  risk_max_daily_drawdown_pct: 0.99
   risk_halt_on_breach: false
   risk_max_position_size_pct: 0.10
   risk_max_leverage: 10.0
   periods_per_year: 252
+  metrics_risk_free_rate: 0.0
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

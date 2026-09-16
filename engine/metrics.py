@@ -46,7 +46,12 @@ def compute_metrics(
     # ── Basic return stats ─────────────────────────────────────────────────
     total_return = (eq[-1] - eq[0]) / eq[0]
     n_years = len(returns) / periods_per_year
-    cagr = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0.0
+    if n_years > 0 and (1.0 + total_return) > 0.0:
+        cagr = (1.0 + total_return) ** (1.0 / n_years) - 1.0
+    elif n_years > 0 and total_return <= -1.0:
+        cagr = -1.0
+    else:
+        cagr = 0.0
 
     # ── Risk-adjusted return ───────────────────────────────────────────────
     rf_period = (1 + risk_free_rate) ** (1 / periods_per_year) - 1

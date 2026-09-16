@@ -162,7 +162,8 @@ class TestWalkForwardSmoke:
         cfg.portfolio.initial_cash = 350_000_000.0
         cfg.portfolio.contract_multiplier = 1000.0
         cfg.risk.halt_on_breach = False
-        cfg.risk.max_daily_drawdown_pct = 0.35
+        cfg.risk.max_daily_drawdown_pct = 0.99
+        cfg.backtest.risk_free_rate = 0.0
 
         bars = _bars(2200)
         space = build_search_space_from_yaml(

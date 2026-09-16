@@ -319,7 +319,12 @@ class WalkForwardValidator:
     def _finalize(self, mode: str, wfo: WFOResult) -> ModeValidationReport:
         cash = float(self._config.portfolio.initial_cash)
         stitched = stitch_oos_equity(wfo.windows, cash)
-        metrics = compute_metrics(stitched) if len(stitched) >= 2 else {}
+        rf = float(getattr(self._config.backtest, "risk_free_rate", 0.0))
+        metrics = (
+            compute_metrics(stitched, risk_free_rate=rf)
+            if len(stitched) >= 2
+            else {}
+        )
         gates = evaluate_gates(metrics, self._thresholds)
         return ModeValidationReport(
             mode=mode,
