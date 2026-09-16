@@ -409,24 +409,31 @@ class WalkForwardOptimizer:
             score = float(result.metrics.get(self._objective_metric, -999.0))
             if not np.isfinite(score):
                 return -999.0
-            # Blend total return so Optuna prefers higher absolute profit when
-            # CAGR is similar across trials (same-length IS windows).
-            if self._objective_metric == "cagr":
-                total_ret = float(result.metrics.get("total_return", 0.0) or 0.0)
-                if np.isfinite(total_ret):
-                    score = score + 0.15 * total_ret
-            if self._require_all_years_profitable:
-                ts = result.equity_timestamps
-                if ts is None or len(ts) != len(result.equity_curve):
-                    return -999.0
-                ok, _, _ = all_calendar_years_profitable(
-                    result.equity_curve,
-                    ts,
-                    min_bars=self._min_year_bars,
-                    min_year_return=self._min_year_return,
+            ts = result.equity_timestamps
+            year_rets = {}
+            if ts is not None and len(ts) == len(result.equity_curve):
+                from engine.metrics import calendar_year_returns
+
+                year_rets = calendar_year_returns(
+                    result.equity_curve, ts, min_bars=self._min_year_bars
                 )
-                if not ok:
+            if self._require_all_years_profitable:
+                if not year_rets:
                     return -999.0
+                if any(
+                    (not np.isfinite(r)) or r <= self._min_year_return
+                    for r in year_rets.values()
+                ):
+                    return -999.0
+            # Prefer higher CAGR/total return and a higher worst calendar year.
+            total_ret = float(result.metrics.get("total_return", 0.0) or 0.0)
+            if not np.isfinite(total_ret):
+                total_ret = 0.0
+            worst_year = min(year_rets.values()) if year_rets else 0.0
+            if self._objective_metric == "cagr":
+                score = score + 0.25 * total_ret + 0.75 * float(worst_year)
+            elif year_rets:
+                score = score + 0.5 * float(worst_year)
             return score
 
         study = optuna.create_study(direction="maximize")  # type: ignore[union-attr]

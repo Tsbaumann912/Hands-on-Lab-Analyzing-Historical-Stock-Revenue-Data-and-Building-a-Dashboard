@@ -79,6 +79,8 @@ def _apply_validation_risk(cfg: Config, v: CLValidationConfig) -> None:
     cfg.risk.max_leverage = float(v.risk_max_leverage)
     # Futures-style Sharpe / Sortino for Optuna + stitched OOS metrics.
     cfg.backtest.risk_free_rate = float(getattr(v, "metrics_risk_free_rate", 0.0))
+    if hasattr(cfg.risk, "risk_fraction"):
+        cfg.risk.risk_fraction = float(getattr(v, "risk_fraction", 0.01))
 
 
 def load_cl_daily_bars(

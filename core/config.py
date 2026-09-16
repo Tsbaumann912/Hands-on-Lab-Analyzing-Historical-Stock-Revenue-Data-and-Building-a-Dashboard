@@ -83,6 +83,7 @@ class RiskConfig:
     default_take_profit_atr_mult: float = 4.0
     max_leverage: float = 10.0
     halt_on_breach: bool = True
+    risk_fraction: float = 0.01                 # equity fraction risked per trade (Kelly)
 
 
 @dataclass
@@ -182,6 +183,12 @@ class CLValidationConfig:
     require_all_years_profitable: bool = True
     min_year_return: float = 0.0
     min_year_bars: int = 60
+    # Higher fractional risk → larger annual/total returns when edge is present.
+    risk_fraction: float = 0.02
+    # Once YTD reaches this gain, flatten for the rest of the calendar year.
+    year_profit_lock_pct: float = 0.001
+    # If True, flatten for the rest of the year once YTD drops to <= 0.
+    year_loss_stop: bool = False
 
 
 @dataclass

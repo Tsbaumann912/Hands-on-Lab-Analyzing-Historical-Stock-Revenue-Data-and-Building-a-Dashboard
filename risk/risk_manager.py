@@ -219,7 +219,8 @@ class RiskManager:
         Uses 1% of equity as default risk per trade, sized by ATR stop distance.
         """
         atr_val = self._atr_cache.get(signal.symbol, 10.0)
-        risk_per_trade = equity * 0.01  # 1 % risk
+        risk_frac = float(getattr(self._cfg, "risk_fraction", 0.01) or 0.01)
+        risk_per_trade = equity * max(risk_frac, 0.0)
 
         stop_distance = (
             abs(signal.stop_loss - self._current_price(signal))
