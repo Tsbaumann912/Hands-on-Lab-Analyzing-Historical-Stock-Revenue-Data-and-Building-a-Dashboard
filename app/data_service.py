@@ -467,11 +467,19 @@ def _strategy_registry() -> Dict[str, Any]:
         from strategies.mean_reversion import MeanReversionRSI
         from strategies.momentum import MomentumBreakout
         from strategies.trend_following import TrendFollowingMACD
+        from strategies.cl_carry_curve import CLCarryCurve
+        from strategies.cl_carry_momentum import CLCarryMomentum
+        from strategies.cl_vol_target_tsmom import CLVolTargetTSMOM
+        from strategies.cl_inventory_confirm import CLInventoryConfirm
 
         _STRATEGY_REGISTRY_CACHE = {
             "MeanReversionRSI":   MeanReversionRSI,
             "MomentumBreakout":   MomentumBreakout,
             "TrendFollowingMACD": TrendFollowingMACD,
+            "CLCarryCurve":       CLCarryCurve,
+            "CLCarryMomentum":    CLCarryMomentum,
+            "CLVolTargetTSMOM":   CLVolTargetTSMOM,
+            "CLInventoryConfirm": CLInventoryConfirm,
         }
     return _STRATEGY_REGISTRY_CACHE
 

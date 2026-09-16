@@ -33,6 +33,24 @@ strategy:
   exit_z_score: 0.5
   lookback: 50
   signal_strength_scaling: true
+  # CL energy risk-premia (see docs/CL_RESEARCH.md)
+  carry_back_month: 3
+  carry_basis_lookback: 63
+  carry_strength_atr_mult: 1.0
+  carry_mom_lookback: 10
+  carry_mom_z_max: 2.0
+  tsmom_horizon_short: 20
+  tsmom_horizon_med: 60
+  tsmom_horizon_long: 120
+  tsmom_z_cap: 3.0
+  vol_target_annual: 0.12
+  ewma_vol_com: 60.0
+  reaction_b: 1.0
+  vol_target_leverage_cap: 2.0
+  inventory_enabled: true
+  inventory_sma: 60
+  inventory_expect_window: 8
+  inventory_confirm_scale: true
 
 risk:
   max_daily_drawdown_pct: 0.03    # 3% daily drawdown circuit breaker

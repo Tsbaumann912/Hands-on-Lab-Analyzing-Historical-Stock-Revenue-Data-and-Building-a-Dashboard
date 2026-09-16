@@ -44,6 +44,10 @@ STRATEGIES = [
     {"value": "MeanReversionRSI", "label": "Mean Reversion RSI"},
     {"value": "MomentumBreakout", "label": "Momentum Breakout (Donchian)"},
     {"value": "TrendFollowingMACD", "label": "Trend Following MACD"},
+    {"value": "CLCarryCurve", "label": "CL Carry Curve (storage)"},
+    {"value": "CLCarryMomentum", "label": "CL Carry Momentum"},
+    {"value": "CLVolTargetTSMOM", "label": "CL Vol-Target TSMOM"},
+    {"value": "CLInventoryConfirm", "label": "CL Inventory Confirm"},
 ]
 
 CONTRACTS = [
@@ -83,6 +87,18 @@ PARAM_LABELS = {
     "lookback": "Lookback",
     "sma_short": "SMA Short",
     "sma_long": "SMA Long",
+    "carry_back_month": "Carry Back Month",
+    "carry_basis_lookback": "Carry Basis Lookback",
+    "carry_strength_atr_mult": "Carry / ATR κ",
+    "carry_mom_lookback": "Carry-Mom Lookback",
+    "carry_mom_z_max": "Carry-Mom Z Max",
+    "tsmom_horizon_short": "TSMOM Short",
+    "tsmom_horizon_med": "TSMOM Med",
+    "tsmom_horizon_long": "TSMOM Long",
+    "vol_target_annual": "Vol Target",
+    "reaction_b": "Reaction B",
+    "inventory_sma": "Inventory SMA",
+    "inventory_expect_window": "Inventory Expect Win",
 }
 
 OBJECTIVE_LABELS = {
