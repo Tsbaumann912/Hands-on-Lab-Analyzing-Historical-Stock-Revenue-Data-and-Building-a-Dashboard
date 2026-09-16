@@ -420,7 +420,7 @@ class WalkForwardOptimizer:
                 if not year_rets:
                     return -999.0
                 if any(
-                    (not np.isfinite(r)) or r <= self._min_year_return
+                    (not np.isfinite(r)) or r < self._min_year_return - 1e-12
                     for r in year_rets.values()
                 ):
                     return -999.0

@@ -302,7 +302,7 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         else f"{size_pct:.0%} equity notional cap"
     )
     year_gate = (
-        "required (every evaluable calendar year > 0)"
+        "required (every evaluable calendar year ≥ 0)"
         if risk.get("require_all_years_profitable")
         else "not required"
     )

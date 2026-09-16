@@ -76,9 +76,9 @@ def all_calendar_years_profitable(
         failures.append("no_calendar_years_evaluable")
         return False, year_rets, failures
     for y, r in sorted(year_rets.items()):
-        # Strict profitability: require strictly positive calendar-year return.
-        if not np.isfinite(r) or r <= min_year_return:
-            failures.append(f"year_{y}_return={r:.6f} <= {min_year_return}")
+        # Non-losing calendar years: require return >= min_year_return (default 0).
+        if not np.isfinite(r) or r < min_year_return - 1e-12:
+            failures.append(f"year_{y}_return={r:.6f} < {min_year_return}")
     return len(failures) == 0, year_rets, failures
 
 

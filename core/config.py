@@ -188,7 +188,7 @@ class CLValidationConfig:
     # Once YTD reaches this gain, flatten for the rest of the calendar year.
     year_profit_lock_pct: float = 0.0015
     # If True, trail-lock once peak YTD clears the lock level.
-    year_loss_stop: bool = True
+    year_loss_stop: bool = False
 
 
 @dataclass
