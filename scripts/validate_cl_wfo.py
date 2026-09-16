@@ -258,6 +258,13 @@ def run_validation(
         "capital": float(v.capital),
         "start_date": v.start_date,
         "data": meta,
+        "risk": {
+            "max_position_size_pct": float(cfg.risk.max_position_size_pct),
+            "max_position_size_uncapped": float(cfg.risk.max_position_size_pct) <= 0.0,
+            "max_dd_limit": float(v.max_dd_limit),
+            "max_daily_drawdown_pct": float(cfg.risk.max_daily_drawdown_pct),
+            "halt_on_breach": bool(cfg.risk.halt_on_breach),
+        },
         "overall_pass": overall_pass,
         "modes": {k: r.to_dict() for k, r in reports.items()},
     }
@@ -274,6 +281,13 @@ def run_validation(
 
 
 def _format_markdown(payload: Dict[str, Any]) -> str:
+    risk = payload.get("risk") or {}
+    size_pct = risk.get("max_position_size_pct")
+    size_note = (
+        "uncapped (ATR/Kelly only)"
+        if risk.get("max_position_size_uncapped")
+        else f"{size_pct:.0%} equity notional cap"
+    )
     lines = [
         "# CL Walk-Forward Validation Report",
         "",
@@ -281,6 +295,8 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         f"- Capital: ${payload['capital']:,.0f}",
         f"- Start: {payload['start_date']}",
         f"- Data: {payload.get('data')}",
+        f"- Position sizing: {size_note}",
+        f"- System MaxDD gate: < {float(risk.get('max_dd_limit', 0.30)):.0%}",
         f"- **Overall pass:** {payload['overall_pass']}",
         "",
     ]

@@ -158,8 +158,9 @@ class RiskManager:
 
         # ── Rule 4: Position sizing ────────────────────────────────────────────
         equity = self._portfolio.total_equity
-        max_notional = equity * self._cfg.max_position_size_pct
         contract_multiplier = self._portfolio_cfg.contract_multiplier
+        # ``max_position_size_pct <= 0`` means uncapped (no notional ceiling).
+        size_cap_pct = float(self._cfg.max_position_size_pct)
 
         # Compute ATR-based contract quantity if signal has no suggested size
         suggested_qty = signal.suggested_size or self._kelly_size(
@@ -167,16 +168,18 @@ class RiskManager:
         )
         notional = suggested_qty * self._current_price(signal) * contract_multiplier
 
-        if notional > max_notional:
-            # Scale down to the maximum allowed notional
-            suggested_qty = max_notional / (
-                self._current_price(signal) * contract_multiplier + 1e-9
-            )
-            msg = (
-                f"Notional {notional:.2f} > max {max_notional:.2f}. "
-                f"Qty scaled to {suggested_qty:.2f}."
-            )
-            logger.info(msg)
+        if size_cap_pct > 0.0:
+            max_notional = equity * size_cap_pct
+            if notional > max_notional:
+                # Scale down to the maximum allowed notional
+                suggested_qty = max_notional / (
+                    self._current_price(signal) * contract_multiplier + 1e-9
+                )
+                msg = (
+                    f"Notional {notional:.2f} > max {max_notional:.2f}. "
+                    f"Qty scaled to {suggested_qty:.2f}."
+                )
+                logger.info(msg)
 
         if suggested_qty < 1.0:
             suggested_qty = 1.0         # minimum 1 contract

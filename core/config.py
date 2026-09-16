@@ -170,7 +170,8 @@ class CLValidationConfig:
     # Research validation: allow system DD up to the promotion gate (not 3% daily halt).
     risk_max_daily_drawdown_pct: float = 0.99
     risk_halt_on_breach: bool = False
-    risk_max_position_size_pct: float = 0.10
+    # 0.0 = uncapped notional; RiskManager skips the equity-% ceiling.
+    risk_max_position_size_pct: float = 0.0
     risk_max_leverage: float = 10.0
     periods_per_year: int = 252
     # Futures risk premia are usually evaluated vs 0 cash yield in the futures P&L.
