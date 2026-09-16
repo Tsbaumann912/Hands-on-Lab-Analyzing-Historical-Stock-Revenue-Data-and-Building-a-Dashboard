@@ -106,13 +106,37 @@ class TestCLCarryCurve:
 class TestCLCarryMomentum:
     def test_emits_directional_signal(self, cl_config: Config):
         strategy = CLCarryMomentum(cl_config, symbols=["CL.c.0"])
-        bars = make_cl_bars(n=400, volatility=1.5, seed=21)
+        bars = make_cl_bars(n=500, volatility=1.5, seed=21, drift=0.05)
         non_flat = [
             s
             for b in bars
             if (s := strategy.update(b)).direction != Direction.FLAT
         ]
         assert len(non_flat) > 0
+
+    def test_metadata_includes_indicators(self, cl_config: Config):
+        strategy = CLCarryMomentum(cl_config, symbols=["CL.c.0"])
+        bars = make_cl_bars(n=500, volatility=1.2, seed=9, drift=0.04)
+        for bar in bars:
+            sig = strategy.update(bar)
+            if sig.direction != Direction.FLAT:
+                assert "stoch_rsi_k" in sig.metadata
+                assert "fast_ma" in sig.metadata
+                assert "slow_ma" in sig.metadata
+                break
+        else:
+            pytest.fail("expected a non-flat confirmed signal")
+
+    def test_disagreement_can_flatten(self, cl_config: Config):
+        """With tight StochRSI bands, many bars should stay FLAT."""
+        cl_config.strategy.stoch_rsi_oversold = 45.0
+        cl_config.strategy.stoch_rsi_overbought = 55.0
+        strategy = CLCarryMomentum(cl_config, symbols=["CL.c.0"])
+        bars = make_cl_bars(n=400, volatility=1.0, seed=3)
+        flats = sum(
+            1 for b in bars if strategy.update(b).direction == Direction.FLAT
+        )
+        assert flats > 50
 
 
 class TestCLVolTargetTSMOM:

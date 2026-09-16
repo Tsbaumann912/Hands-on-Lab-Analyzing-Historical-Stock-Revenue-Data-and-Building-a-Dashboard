@@ -72,6 +72,36 @@ carry_mom_z_max:
   low: 1.0
   high: 4.0
 
+fast_ma_period:
+  type: int
+  low: 5
+  high: 30
+
+slow_ma_period:
+  type: int
+  low: 30
+  high: 100
+
+stoch_rsi_period:
+  type: int
+  low: 7
+  high: 21
+
+stoch_rsi_stoch_period:
+  type: int
+  low: 7
+  high: 21
+
+stoch_rsi_oversold:
+  type: float
+  low: 10.0
+  high: 30.0
+
+stoch_rsi_overbought:
+  type: float
+  low: 70.0
+  high: 90.0
+
 tsmom_horizon_short:
   type: int
   low: 10

@@ -39,6 +39,14 @@ strategy:
   carry_strength_atr_mult: 1.0
   carry_mom_lookback: 10
   carry_mom_z_max: 2.0
+  fast_ma_period: 20
+  slow_ma_period: 50
+  stoch_rsi_period: 14
+  stoch_rsi_stoch_period: 14
+  stoch_rsi_k: 3
+  stoch_rsi_d: 3
+  stoch_rsi_oversold: 20.0
+  stoch_rsi_overbought: 80.0
   tsmom_horizon_short: 20
   tsmom_horizon_med: 60
   tsmom_horizon_long: 120

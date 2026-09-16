@@ -52,6 +52,14 @@ class StrategyConfig:
     carry_strength_atr_mult: float = 1.0
     carry_mom_lookback: int = 10
     carry_mom_z_max: float = 2.0
+    fast_ma_period: int = 20
+    slow_ma_period: int = 50
+    stoch_rsi_period: int = 14
+    stoch_rsi_stoch_period: int = 14
+    stoch_rsi_k: int = 3
+    stoch_rsi_d: int = 3
+    stoch_rsi_oversold: float = 20.0
+    stoch_rsi_overbought: float = 80.0
     tsmom_horizon_short: int = 20
     tsmom_horizon_med: int = 60
     tsmom_horizon_long: int = 120

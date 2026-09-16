@@ -58,7 +58,13 @@ injected series or a price-implied proxy when EIA is unavailable — never fabri
 
 ## Anchored + rolling walk-forward (promotion)
 
-Run both modes on daily `CL=F` from **2008-01-01** with account size **$350M**:
+Confirmation filters (must agree with carry-momentum, else FLAT):
+
+- **Fast MA / Slow MA** — price trend alignment (`fast_ma_period`, `slow_ma_period`)
+- **Stochastic RSI** — avoid longs when StochRSI %K is overbought; avoid shorts when
+  oversold (`stoch_rsi_*` knobs)
+
+Re-validate after indicator changes:
 
 ```bash
 python3 scripts/validate_cl_wfo.py \
@@ -66,7 +72,7 @@ python3 scripts/validate_cl_wfo.py \
   --start 2008-01-01 \
   --capital 350000000 \
   --modes anchored,rolling \
-  --trials 25
+  --trials 15
 ```
 
 | Mode | IS | OOS | Notes |

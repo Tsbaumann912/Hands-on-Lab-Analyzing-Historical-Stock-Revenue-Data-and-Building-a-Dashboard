@@ -50,6 +50,11 @@ STRATEGY_PARAM_SPACES: Dict[str, List[str]] = {
         "carry_back_month",
         "carry_mom_lookback",
         "carry_mom_z_max",
+        "fast_ma_period",
+        "slow_ma_period",
+        "stoch_rsi_period",
+        "stoch_rsi_oversold",
+        "stoch_rsi_overbought",
         "atr_period",
     ],
     "CLVolTargetTSMOM": [
