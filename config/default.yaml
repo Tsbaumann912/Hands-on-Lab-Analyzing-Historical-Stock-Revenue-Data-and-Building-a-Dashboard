@@ -149,8 +149,8 @@ cl_validation:
   min_year_return: 0.0
   min_year_bars: 60               # skip stub edge years (< ~3 months)
   risk_fraction: 0.02             # 2% equity risk per trade (boost returns)
-  year_profit_lock_pct: 0.005     # lock calendar year once YTD >= 0.5% (buffer)
-  year_loss_stop: false           # allow recovery; rely on Optuna + lock for green years
+  year_profit_lock_pct: 0.0015    # lock calendar year once YTD >= 0.15%
+  year_loss_stop: true            # trail-lock after peak clears lock level
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

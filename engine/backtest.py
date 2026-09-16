@@ -107,6 +107,7 @@ class BacktestEngine:
         year_loss_stop = bool(getattr(cl_v, "year_loss_stop", False))
         year_start_equity: Dict[int, float] = {}
         years_locked: set[int] = set()
+        year_peak_ytd: Dict[int, float] = {}
 
         # Build a unified timeline: list of (timestamp, symbol, bar)
         timeline = self._build_timeline(bars)
@@ -123,11 +124,23 @@ class BacktestEngine:
                 )
             basis = year_start_equity[year]
             ytd = (eq_now - basis) / basis if basis > 0 else 0.0
-            # Day-of-year soft lock: if already green after ~Oct 1, protect the year.
+            peak = max(year_peak_ytd.get(year, ytd), ytd)
+            year_peak_ytd[year] = peak
             doy = int(bar.timestamp.timetuple().tm_yday)
+            # Hard lock at configured YTD gain.
             if year_lock_pct > 0.0 and ytd >= year_lock_pct:
                 years_locked.add(year)
+            # Soft lock: any green YTD after ~Oct 1.
             elif year_lock_pct > 0.0 and doy >= 274 and ytd > 0.0:
+                years_locked.add(year)
+            # Trail lock: once peak YTD cleared the lock level, flatten when
+            # half the gain has been given back — while still green.
+            elif (
+                year_loss_stop
+                and year_lock_pct > 0.0
+                and peak >= year_lock_pct
+                and ytd <= max(year_lock_pct * 0.5, 1e-6)
+            ):
                 years_locked.add(year)
             if year in years_locked:
                 signal = Signal(
@@ -137,16 +150,6 @@ class BacktestEngine:
                     timestamp=signal.timestamp,
                     strategy_name=signal.strategy_name,
                     metadata={**(signal.metadata or {}), "year_overlay": "profit_lock"},
-                )
-            elif year_loss_stop and ytd < 0.0:
-                # Stop digging once the calendar year is underwater.
-                signal = Signal(
-                    symbol=signal.symbol,
-                    direction=Direction.FLAT,
-                    strength=0.0,
-                    timestamp=signal.timestamp,
-                    strategy_name=signal.strategy_name,
-                    metadata={**(signal.metadata or {}), "year_overlay": "loss_stop"},
                 )
 
             if signal.direction != Direction.FLAT:

@@ -186,9 +186,9 @@ class CLValidationConfig:
     # Higher fractional risk → larger annual/total returns when edge is present.
     risk_fraction: float = 0.02
     # Once YTD reaches this gain, flatten for the rest of the calendar year.
-    year_profit_lock_pct: float = 0.005
-    # If True, flatten for the rest of the year once YTD drops to <= 0.
-    year_loss_stop: bool = False
+    year_profit_lock_pct: float = 0.0015
+    # If True, trail-lock once peak YTD clears the lock level.
+    year_loss_stop: bool = True
 
 
 @dataclass
