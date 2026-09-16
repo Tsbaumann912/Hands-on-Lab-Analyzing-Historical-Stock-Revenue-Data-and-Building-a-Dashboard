@@ -40,6 +40,8 @@ FUTURES_ASSET_CONFIG: Dict[str, Dict[str, str]] = {
     "ZB": {"name": "30-Year T-Bond", "yahoo_symbol": "ZB=F"},
     "SI": {"name": "Silver", "yahoo_symbol": "SI=F"},
     "NG": {"name": "Natural Gas", "yahoo_symbol": "NG=F"},
+    "PL": {"name": "Platinum", "yahoo_symbol": "PL=F"},
+    "PA": {"name": "Palladium", "yahoo_symbol": "PA=F"},
 }
 
 _POSITIVE_SENTIMENT_TOKENS = {
@@ -467,11 +469,15 @@ def _strategy_registry() -> Dict[str, Any]:
         from strategies.mean_reversion import MeanReversionRSI
         from strategies.momentum import MomentumBreakout
         from strategies.trend_following import TrendFollowingMACD
+        from strategies.platinum_tsmom import PlatinumTSMOM
+        from strategies.platinum_gold_spread import PlatinumGoldSpread
 
         _STRATEGY_REGISTRY_CACHE = {
             "MeanReversionRSI":   MeanReversionRSI,
             "MomentumBreakout":   MomentumBreakout,
             "TrendFollowingMACD": TrendFollowingMACD,
+            "PlatinumTSMOM":      PlatinumTSMOM,
+            "PlatinumGoldSpread": PlatinumGoldSpread,
         }
     return _STRATEGY_REGISTRY_CACHE
 

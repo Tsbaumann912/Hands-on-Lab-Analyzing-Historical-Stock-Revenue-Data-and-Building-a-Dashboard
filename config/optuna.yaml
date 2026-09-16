@@ -45,3 +45,18 @@ sma_long:
   type: int
   low: 30
   high: 200
+
+entry_z_score:
+  type: float
+  low: 1.0
+  high: 3.0
+
+exit_z_score:
+  type: float
+  low: 0.1
+  high: 1.0
+
+rv_lookback:
+  type: int
+  low: 30
+  high: 120

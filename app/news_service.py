@@ -202,6 +202,66 @@ FUTURES_ASSETS: dict[str, dict[str, Any]] = {
         "tick_size": 0.005,
         "multiplier": 5000,
     },
+    "PL": {
+        "name": "Platinum",
+        "full_name": "Platinum Futures (NYMEX)",
+        "yf_symbol": "PL=F",
+        "etf_proxy": "PPLT",
+        "search_query": "platinum+futures+NYMEX",
+        "sector": "Precious Metals",
+        "color": "#a2845e",
+        "icon": "Pt",
+        "description": (
+            "Platinum futures trade on NYMEX (50 troy oz). Supply is concentrated "
+            "in South Africa (~70–80% of mine output), while demand spans autocatalysts, "
+            "industrial uses, jewellery, and volatile ETF/investment flows. Prices react "
+            "to SA power/labor shocks, auto production and emissions rules, recycling "
+            "scrap, and gold’s monetary spillover into PGMs."
+        ),
+        "rss_feeds": [
+            "https://feeds.finance.yahoo.com/rss/2.0/headline?s=PL=F&region=US&lang=en-US",
+        ],
+        "key_drivers": [
+            "South Africa Mine Supply",
+            "Autocatalyst Demand",
+            "Recycling Scrap",
+            "Gold Relative Value",
+            "USD / Real Rates",
+        ],
+        "contract_size": 50,  # troy ounces
+        "unit": "$/troy oz",
+        "tick_size": 0.10,
+        "multiplier": 50,
+    },
+    "PA": {
+        "name": "Palladium",
+        "full_name": "Palladium Futures (NYMEX)",
+        "yf_symbol": "PA=F",
+        "etf_proxy": "PALL",
+        "search_query": "palladium+futures+NYMEX",
+        "sector": "Precious Metals",
+        "color": "#8e8e93",
+        "icon": "Pd",
+        "description": (
+            "Palladium futures trade on NYMEX (100 troy oz). Demand is dominated by "
+            "gasoline autocatalysts; supply is concentrated in Russia and South Africa. "
+            "Platinum-for-palladium substitution and EV penetration are key structural themes."
+        ),
+        "rss_feeds": [
+            "https://feeds.finance.yahoo.com/rss/2.0/headline?s=PA=F&region=US&lang=en-US",
+        ],
+        "key_drivers": [
+            "Autocatalyst Loadings",
+            "Russia / SA Supply",
+            "Pt–Pd Substitution",
+            "EV Penetration",
+            "USD Strength",
+        ],
+        "contract_size": 100,  # troy ounces
+        "unit": "$/troy oz",
+        "tick_size": 0.10,
+        "multiplier": 100,
+    },
     "NG": {
         "name": "Natural Gas",
         "full_name": "Natural Gas Futures (NYMEX)",

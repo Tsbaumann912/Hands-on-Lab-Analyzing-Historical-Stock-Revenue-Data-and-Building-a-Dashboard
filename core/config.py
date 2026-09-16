@@ -46,6 +46,9 @@ class StrategyConfig:
     exit_z_score: float = 0.5
     lookback: int = 50
     signal_strength_scaling: bool = True
+    tsmom_horizons: List[int] = field(default_factory=lambda: [21, 63, 252])
+    rv_lookback: int = 63
+    gold_ticker: str = "GC=F"
 
 
 @dataclass

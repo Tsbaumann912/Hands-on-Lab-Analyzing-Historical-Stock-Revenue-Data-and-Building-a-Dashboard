@@ -1,0 +1,56 @@
+# Standalone NYMEX Platinum (PL) ensemble CTA — independent of QuantTerminal.
+contract:
+  symbol: PL
+  name: Platinum
+  yfinance_ticker: PL=F
+  multiplier: 50.0          # 50 troy ounces
+  tick_size: 0.10           # $0.10 / oz
+  tick_value: 5.00          # $5 per tick
+  commission_per_contract: 2.25
+  slippage_ticks: 2         # wider than GC — thinner PL liquidity
+
+ensemble:
+  horizons_days: [21, 63, 252]
+  weights:
+    tsmom: 0.30
+    carry: 0.20
+    pl_gc_rv: 0.25
+    inventory: 0.15
+    fade: 0.10
+  forecast_cap: 20.0
+  agreement_min: 0.40
+  fdm_cap: 2.5
+  vol_target_annual: 0.12
+  ewma_vol_com_days: 60
+  fade_z: 2.0
+  buffer_forecast: 2.0
+  kelly_fraction: 0.35
+  inventory_sma: 60
+  inventory_delta_days: 20
+  rv_lookback: 63
+  rv_entry_z: 1.5
+  price_z_lookback: 20
+  atr_period: 14
+  stop_atr_mult: 2.0
+  take_profit_atr_mult: 4.0
+  gold_ticker: GC=F
+
+risk:
+  max_daily_drawdown_pct: 0.03
+  max_position_size_pct: 0.50
+  max_leverage: 5.0
+  max_contracts: 20
+  halt_on_breach: true
+
+portfolio:
+  # PL notional ≈ price × 50 (~$50k/contract at $1,000/oz); size for ≥1 lot.
+  initial_cash: 500000.0
+
+backtest:
+  walk_forward_windows: 4
+  in_sample_ratio: 0.70
+  purge_bars: 5
+
+validation:
+  dsr_pass_threshold: 0.95
+  oos_retention_min: 0.60
