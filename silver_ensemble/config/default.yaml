@@ -10,35 +10,35 @@ contract:
   slippage_ticks: 1
 
 ensemble:
-  # Multi-horizon TSMOM including intermediate 126d (plan)
   horizons_days: [21, 63, 126, 252]
+  # Optuna-tuned weights (maximize avg calendar-year return, max DD < 30%)
   weights:
-    tsmom: 0.30
-    carry: 0.25
-    basis_mom: 0.20
-    inventory: 0.15
-    fade: 0.10
+    tsmom: 0.266
+    carry: 0.227
+    basis_mom: 0.111
+    inventory: 0.250
+    fade: 0.146
   forecast_cap: 20.0
-  agreement_min: 0.40
-  fdm_cap: 2.5
-  vol_target_annual: 0.12
+  agreement_min: 0.376
+  fdm_cap: 1.801
+  vol_target_annual: 0.093
   ewma_vol_com_days: 60
-  fade_z: 2.0
-  buffer_forecast: 2.0
-  kelly_fraction: 0.35
+  fade_z: 2.554
+  buffer_forecast: 3.402
+  kelly_fraction: 0.246
   inventory_sma: 60
   inventory_delta_days: 20
   basis_mom_lookback: 63
   price_z_lookback: 20
   ratio_lookback: 63
   atr_period: 14
-  stop_atr_mult: 2.0
-  take_profit_atr_mult: 4.0
+  stop_atr_mult: 2.382
+  take_profit_atr_mult: 5.434
 
 risk:
-  max_daily_drawdown_pct: 0.30
-  max_position_size_pct: 0.50
-  max_leverage: 5.0
+  max_daily_drawdown_pct: 0.29
+  max_position_size_pct: 0.396
+  max_leverage: 2.821
   max_contracts: 2500
   halt_on_breach: true
 
@@ -52,7 +52,6 @@ backtest:
   oos_years: 1
   step_years: 1
   purge_bars: 5
-  # Legacy block WFO (used by validate_ensemble ablation path)
   walk_forward_windows: 4
   in_sample_ratio: 0.70
 
@@ -64,3 +63,9 @@ validation:
   min_oos_cagr: 0.0
   min_oos_upi: 0.0
   require_both_modes: true
+
+optimization:
+  objective: maximize_avg_calendar_year_return
+  constraint: max_drawdown < 0.30
+  n_trials: 80
+  search_space: config/optuna.yaml

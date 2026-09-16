@@ -73,6 +73,23 @@ Purge gap between IS and OOS: `purge_bars` (default 5). Fixed strategy parameter
 ```bash
 python -m silver_ensemble.cli validate-wfo --start 2008-01-01
 python -m silver_ensemble.cli validate-wfo --synthetic
+python -m silver_ensemble.cli optimize --start 2008-01-01 --trials 80
+```
+
+## Optimization (calendar-year profitability)
+
+Objective: **maximize average calendar-year equity return** subject to
+**max system drawdown &lt; 30%** (`silver_ensemble/optimize.py`, search space in
+`config/optuna.yaml`).
+
+Tunable knobs: sleeve weights, vol target, Kelly fraction, agreement/buffer/fade
+thresholds, ATR stops, position/leverage caps. Circuit-breaker halt is set to
+29% so realised max DD stays strictly below the 30% gate.
+
+CLI:
+
+```bash
+python -m silver_ensemble.cli optimize --start 2008-01-01 --trials 80 --max-dd 0.30
 ```
 
 ## Robust combination

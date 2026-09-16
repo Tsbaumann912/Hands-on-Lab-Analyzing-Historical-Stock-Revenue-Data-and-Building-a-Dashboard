@@ -14,6 +14,7 @@ setup(
         "pyyaml>=6.0",
         "scipy>=1.10",
         "yfinance>=0.2.40",
+        "optuna>=3.0",
     ],
     entry_points={
         "console_scripts": [

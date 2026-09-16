@@ -4,3 +4,4 @@ pyyaml>=6.0
 scipy>=1.10
 pytest>=7.0
 yfinance>=0.2.40
+optuna>=3.0

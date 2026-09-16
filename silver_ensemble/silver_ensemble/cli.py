@@ -11,6 +11,11 @@ from pathlib import Path
 from silver_ensemble.data import dataframe_to_bars, load_yfinance_si, make_synthetic_si
 from silver_ensemble.engine import BacktestEngine
 from silver_ensemble.models import load_config
+from silver_ensemble.optimize import (
+    evaluate_config,
+    run_optimization,
+    write_optimized_yaml,
+)
 from silver_ensemble.validation import (
     institutional_report_to_dict,
     run_institutional_wfo,
@@ -115,6 +120,59 @@ def cmd_validate_wfo(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def cmd_optimize(args: argparse.Namespace) -> int:
+    cfg, bars = _load_bars_wfo(args)
+    space = Path(args.search_space) if args.search_space else None
+    logger.info(
+        "Optimize avg calendar-year return | bars=%d trials=%d max_dd<%.0f%%",
+        len(bars),
+        args.trials,
+        args.max_dd * 100,
+    )
+    baseline = evaluate_config(cfg, bars)
+    best_params, best_eval, feasible = run_optimization(
+        cfg,
+        bars,
+        n_trials=args.trials,
+        max_dd_gate=args.max_dd,
+        seed=args.seed,
+        search_space_path=space,
+    )
+    out_cfg = Path(args.out_config) if args.out_config else (
+        Path(__file__).resolve().parents[1] / "config" / "default.yaml"
+    )
+    write_optimized_yaml(
+        Path(args.config),
+        out_cfg,
+        best_params,
+    )
+    payload = {
+        "baseline": {
+            "avg_calendar_year_return": baseline["avg_calendar_year_return"],
+            "max_drawdown": baseline["max_drawdown"],
+            "pct_years_positive": baseline["pct_years_positive"],
+            "sharpe": baseline["sharpe"],
+            "cagr": baseline["cagr"],
+            "year_returns": baseline["year_returns"],
+        },
+        "optimized": {
+            "avg_calendar_year_return": best_eval["avg_calendar_year_return"],
+            "max_drawdown": best_eval["max_drawdown"],
+            "pct_years_positive": best_eval["pct_years_positive"],
+            "sharpe": best_eval["sharpe"],
+            "cagr": best_eval["cagr"],
+            "upi": best_eval["upi"],
+            "year_returns": best_eval["year_returns"],
+        },
+        "best_params": best_params,
+        "n_feasible": len(feasible),
+        "out_config": str(out_cfg),
+        "constraint_ok": bool(best_eval["max_drawdown"] < args.max_dd),
+    }
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["constraint_ok"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="silver_ensemble", description="Standalone SI silver ensemble CTA")
     p.add_argument(
@@ -157,6 +215,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     wfo.add_argument("--end", default=None)
     wfo.set_defaults(func=cmd_validate_wfo)
+
+    opt = sub.add_parser(
+        "optimize",
+        help="Maximize avg calendar-year return subject to max DD < 30%",
+    )
+    opt.add_argument("--synthetic", action="store_true")
+    opt.add_argument("--days", type=int, default=3000)
+    opt.add_argument("--seed", type=int, default=42)
+    opt.add_argument("--period", default="max")
+    opt.add_argument("--start", default=None)
+    opt.add_argument("--end", default=None)
+    opt.add_argument("--trials", type=int, default=80)
+    opt.add_argument("--max-dd", type=float, default=0.30)
+    opt.add_argument(
+        "--search-space",
+        default=str(Path(__file__).resolve().parents[1] / "config" / "optuna.yaml"),
+    )
+    opt.add_argument(
+        "--out-config",
+        default=str(Path(__file__).resolve().parents[1] / "config" / "default.yaml"),
+        help="YAML path to write optimized parameters",
+    )
+    opt.set_defaults(func=cmd_optimize)
     return p
 
 

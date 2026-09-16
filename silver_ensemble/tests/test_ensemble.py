@@ -229,3 +229,35 @@ def test_institutional_wfo_synthetic_schema() -> None:
     assert isinstance(report.passed, bool)
     assert isinstance(report.rolling.passed, bool)
     assert isinstance(report.anchored.passed, bool)
+
+
+def test_calendar_year_returns_and_optimize_apply() -> None:
+    from silver_ensemble.optimize import (
+        apply_trial_params,
+        calendar_year_returns,
+        evaluate_config,
+        mean_calendar_year_return,
+    )
+
+    cfg = load_config(ROOT / "config" / "default.yaml")
+    bars = dataframe_to_bars(make_synthetic_si(800, seed=9), "SI")
+    res = BacktestEngine(cfg).run(bars)
+    yrs = calendar_year_returns(bars, res.equity_curve)
+    assert len(yrs) >= 2
+    assert abs(mean_calendar_year_return(bars, res.equity_curve) - float(np.mean(list(yrs.values())))) < 1e-12
+
+    params = {
+        "w_tsmom": 0.4,
+        "w_carry": 0.2,
+        "w_basis_mom": 0.15,
+        "w_inventory": 0.15,
+        "w_fade": 0.10,
+        "vol_target_annual": 0.08,
+        "kelly_fraction": 0.25,
+    }
+    cfg2 = apply_trial_params(cfg, params)
+    assert abs(sum(cfg2.ensemble.weights.values()) - 1.0) < 1e-9
+    assert cfg2.ensemble.vol_target_annual == 0.08
+    ev = evaluate_config(cfg2, bars)
+    assert "avg_calendar_year_return" in ev
+    assert ev["max_drawdown"] >= 0.0
