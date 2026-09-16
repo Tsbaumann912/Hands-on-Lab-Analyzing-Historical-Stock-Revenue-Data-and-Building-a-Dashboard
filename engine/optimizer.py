@@ -430,9 +430,9 @@ class WalkForwardOptimizer:
                 total_ret = 0.0
             worst_year = min(year_rets.values()) if year_rets else 0.0
             if self._objective_metric == "cagr":
-                score = score + 0.25 * total_ret + 1.5 * float(worst_year)
+                score = 2.0 * float(worst_year) + score + 0.35 * total_ret
             elif year_rets:
-                score = score + 1.0 * float(worst_year)
+                score = score + 1.5 * float(worst_year)
             return score
 
         study = optuna.create_study(direction="maximize")  # type: ignore[union-attr]

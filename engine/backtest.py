@@ -104,8 +104,10 @@ class BacktestEngine:
         # Calendar-year profit lock / loss stop (CL validation overlays).
         cl_v = getattr(config, "cl_validation", None)
         year_lock_pct = float(getattr(cl_v, "year_profit_lock_pct", 0.0) or 0.0)
+        year_loss_stop = bool(getattr(cl_v, "year_loss_stop", False))
         year_start_equity: Dict[int, float] = {}
         years_locked: set[int] = set()
+        years_seen_green: set[int] = set()
 
         # Build a unified timeline: list of (timestamp, symbol, bar)
         timeline = self._build_timeline(bars)
@@ -122,12 +124,15 @@ class BacktestEngine:
                 )
             basis = year_start_equity[year]
             ytd = (eq_now - basis) / basis if basis > 0 else 0.0
+            if ytd > 1e-6:
+                years_seen_green.add(year)
             doy = int(bar.timestamp.timetuple().tm_yday)
-            # Lock the calendar year once YTD clears the profit threshold, or
-            # soft-lock any green YTD after ~1 Oct to protect the year.
             if year_lock_pct > 0.0 and ytd >= year_lock_pct:
                 years_locked.add(year)
             elif year_lock_pct > 0.0 and doy >= 274 and ytd >= 0.0:
+                years_locked.add(year)
+            elif year_loss_stop and year in years_seen_green and ytd <= 1e-4:
+                # Previously green — freeze while still flat/tiny-green to avoid red years.
                 years_locked.add(year)
             if year in years_locked:
                 signal = Signal(
