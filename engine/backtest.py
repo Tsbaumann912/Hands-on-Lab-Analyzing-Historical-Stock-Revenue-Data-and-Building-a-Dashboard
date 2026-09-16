@@ -123,7 +123,11 @@ class BacktestEngine:
                 )
             basis = year_start_equity[year]
             ytd = (eq_now - basis) / basis if basis > 0 else 0.0
+            # Day-of-year soft lock: if already green after ~Oct 1, protect the year.
+            doy = int(bar.timestamp.timetuple().tm_yday)
             if year_lock_pct > 0.0 and ytd >= year_lock_pct:
+                years_locked.add(year)
+            elif year_lock_pct > 0.0 and doy >= 274 and ytd > 0.0:
                 years_locked.add(year)
             if year in years_locked:
                 signal = Signal(
