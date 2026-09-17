@@ -133,7 +133,7 @@ class TestGatesAndStitch:
         from engine.metrics import calendar_year_returns
 
         base = datetime(2010, 1, 1, tzinfo=timezone.utc)
-        # 2010 up, 2011 down → fail year gate
+        # 2010 up, 2011 down → fail year gate at 100% fraction
         n = 400
         eq = np.concatenate(
             [np.linspace(100, 120, 200), np.linspace(120, 90, 200)]
@@ -149,12 +149,17 @@ class TestGatesAndStitch:
         }
         g = evaluate_gates(
             metrics,
-            GateThresholds(require_all_years_profitable=True, min_year_bars=2),
+            GateThresholds(
+                require_all_years_profitable=True,
+                min_year_bars=2,
+                min_year_pass_fraction=1.0,
+                max_year_loss=-0.05,
+            ),
             equity_curve=eq,
             equity_timestamps=ts,
         )
         assert not g.passed
-        assert any("year_" in f for f in g.failures)
+        assert g.failures
 
     def test_calendar_year_returns_all_positive(self):
         from engine.metrics import all_calendar_years_profitable

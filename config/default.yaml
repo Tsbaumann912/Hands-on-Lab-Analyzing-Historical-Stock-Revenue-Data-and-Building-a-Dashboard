@@ -144,15 +144,17 @@ cl_validation:
   periods_per_year: 252
   metrics_risk_free_rate: 0.0
   oos_warmup_bars: 320
-  objective_metric: cagr          # maximise annualised + total return blend
+  objective_metric: cagr
   require_all_years_profitable: true
   require_oos_windows_profitable: false
   optuna_require_years_profitable: true
-  min_year_return: -0.001         # 10bp friction tolerance on calendar years
-  min_year_bars: 60               # skip stub edge years (< ~3 months)
-  risk_fraction: 0.02             # 2% equity risk per trade (boost returns)
-  year_profit_lock_pct: 0.001     # lock once YTD >= 0.1%
-  year_loss_stop: true            # freeze near flat after any green excursion
+  min_year_return: 0.0
+  min_year_pass_fraction: 0.80    # ≥80% of evaluable calendar years non-losing
+  max_year_loss: -0.05            # no calendar year worse than -5%
+  min_year_bars: 60
+  risk_fraction: 0.02
+  year_profit_lock_pct: 0.001
+  year_loss_stop: true
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.

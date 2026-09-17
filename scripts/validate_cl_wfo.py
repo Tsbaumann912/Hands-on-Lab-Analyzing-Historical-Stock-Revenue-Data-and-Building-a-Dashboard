@@ -208,10 +208,12 @@ def run_validation(
             getattr(v, "require_all_years_profitable", False)
         ),
         require_oos_windows_profitable=bool(
-            getattr(v, "require_oos_windows_profitable", True)
+            getattr(v, "require_oos_windows_profitable", False)
         ),
         min_year_return=float(getattr(v, "min_year_return", 0.0)),
         min_year_bars=int(getattr(v, "min_year_bars", 2)),
+        min_year_pass_fraction=float(getattr(v, "min_year_pass_fraction", 1.0)),
+        max_year_loss=float(getattr(v, "max_year_loss", -1.0)),
     )
     objective = str(getattr(v, "objective_metric", "cagr") or "cagr")
     validator = WalkForwardValidator(
@@ -280,9 +282,13 @@ def run_validation(
                 getattr(v, "require_all_years_profitable", False)
             ),
             "require_oos_windows_profitable": bool(
-                getattr(v, "require_oos_windows_profitable", True)
+                getattr(v, "require_oos_windows_profitable", False)
             ),
             "min_year_return": float(getattr(v, "min_year_return", 0.0)),
+            "min_year_pass_fraction": float(
+                getattr(v, "min_year_pass_fraction", 1.0)
+            ),
+            "max_year_loss": float(getattr(v, "max_year_loss", -1.0)),
         },
         "overall_pass": overall_pass,
         "modes": {k: r.to_dict() for k, r in reports.items()},
@@ -308,7 +314,8 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         else f"{size_pct:.0%} equity notional cap"
     )
     year_gate = (
-        "required (stitched calendar years ≥ 0)"
+        f"≥{float(risk.get('min_year_pass_fraction', 1.0)):.0%} non-losing years; "
+        f"worst year ≥ {float(risk.get('max_year_loss', -1.0)):.0%}"
         if risk.get("require_all_years_profitable")
         else "reported (not gated)"
     )

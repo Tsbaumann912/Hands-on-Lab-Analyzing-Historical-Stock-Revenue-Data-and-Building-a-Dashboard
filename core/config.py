@@ -183,7 +183,9 @@ class CLValidationConfig:
     require_all_years_profitable: bool = True
     require_oos_windows_profitable: bool = False
     optuna_require_years_profitable: bool = True
-    min_year_return: float = -0.001
+    min_year_return: float = 0.0
+    min_year_pass_fraction: float = 0.80
+    max_year_loss: float = -0.05
     min_year_bars: int = 60
     risk_fraction: float = 0.02
     year_profit_lock_pct: float = 0.001

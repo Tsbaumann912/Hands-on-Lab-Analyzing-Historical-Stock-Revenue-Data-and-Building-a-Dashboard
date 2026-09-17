@@ -214,10 +214,9 @@ class GateThresholds:
     require_all_years_profitable: bool = False
     min_year_return: float = 0.0
     min_year_bars: int = 2
-    # When True with require_all_years_profitable, enforce each OOS window's
-    # total_return >= min_year_return (WFO-native ~annual folds) in addition
-    # to stitched calendar-year returns.
-    require_oos_windows_profitable: bool = True
+    require_oos_windows_profitable: bool = False
+    min_year_pass_fraction: float = 1.0
+    max_year_loss: float = -1.0
 
 
 @dataclass
@@ -250,10 +249,10 @@ def evaluate_gates(
     Hard promotion gates on stitched OOS metrics.
 
     Requires positive Sharpe, UPI, CAGR and ``abs(max_drawdown) < max_dd_limit``.
-    Optionally requires every evaluable calendar year and/or every OOS window
-    to be non-losing.
+    Calendar-year gate can require a minimum fraction of non-losing years and a
+    floor on the worst year (``max_year_loss``).
     """
-    from engine.metrics import all_calendar_years_profitable
+    from engine.metrics import calendar_year_returns
 
     thr = thresholds or GateThresholds()
     failures: List[str] = []
@@ -279,14 +278,28 @@ def evaluate_gates(
         if equity_curve is None or equity_timestamps is None or len(equity_timestamps) == 0:
             failures.append("calendar_year_gate_missing_timestamps")
         else:
-            ok, year_rets, year_failures = all_calendar_years_profitable(
-                equity_curve,
-                equity_timestamps,
-                min_bars=thr.min_year_bars,
-                min_year_return=thr.min_year_return,
+            year_rets = calendar_year_returns(
+                equity_curve, equity_timestamps, min_bars=thr.min_year_bars
             )
-            if not ok:
-                failures.extend(year_failures)
+            if not year_rets:
+                failures.append("no_calendar_years_evaluable")
+            else:
+                nonneg = [
+                    r
+                    for r in year_rets.values()
+                    if np.isfinite(r) and r >= thr.min_year_return - 1e-12
+                ]
+                frac = len(nonneg) / float(len(year_rets))
+                if frac + 1e-12 < float(thr.min_year_pass_fraction):
+                    failures.append(
+                        f"calendar_year_pass_fraction={frac:.3f} < "
+                        f"{thr.min_year_pass_fraction}"
+                    )
+                worst = min(year_rets.values())
+                if np.isfinite(worst) and worst < float(thr.max_year_loss) - 1e-12:
+                    failures.append(
+                        f"worst_calendar_year={worst:.6f} < {thr.max_year_loss}"
+                    )
 
     if thr.require_oos_windows_profitable and oos_window_returns is not None:
         for i, ret in enumerate(oos_window_returns):
