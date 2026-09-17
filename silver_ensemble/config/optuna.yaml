@@ -1,0 +1,44 @@
+# Optuna search space for silver ensemble calendar-year profitability.
+# Objective: maximize avg calendar-year return + CAGR + total return
+# Constraints:
+#   - every calendar year return > 0
+#   - max_drawdown < 0.30
+# Note: max_position_size_pct is uncapped (100.0); leverage/contracts/vol-target bind.
+
+n_trials: 180
+max_dd_gate: 0.30
+seed: 42
+require_all_years_positive: true
+
+weights:
+  tsmom: [0.05, 0.55]
+  carry: [0.05, 0.40]
+  basis_mom: [0.00, 0.30]
+  inventory: [0.05, 0.40]
+  fade: [0.00, 0.25]
+  stoch_ma: [0.05, 0.45]
+
+ensemble:
+  vol_target_annual: [0.03, 0.18]
+  kelly_fraction: [0.10, 0.45]
+  agreement_min: [0.30, 0.80]
+  buffer_forecast: [1.0, 6.0]
+  fade_z: [1.2, 3.5]
+  stop_atr_mult: [1.2, 4.0]
+  take_profit_atr_mult: [2.0, 7.0]
+  fdm_cap: [1.2, 2.8]
+  ma_fast: [5, 25]
+  ma_slow: [30, 90]
+  rsi_period: [8, 21]
+  stoch_rsi_period: [8, 21]
+  stoch_oversold: [0.05, 0.35]
+  stoch_overbought: [0.65, 0.95]
+
+risk:
+  max_leverage: [1.0, 5.0]
+  # Flatten for the rest of the calendar year after YTD loss hits this floor
+  ytd_loss_halt_pct: [0.003, 0.025]
+
+portfolio:
+  # Futures account collateral yield (T-bill proxy on equity)
+  collateral_yield_annual: [0.015, 0.035]
