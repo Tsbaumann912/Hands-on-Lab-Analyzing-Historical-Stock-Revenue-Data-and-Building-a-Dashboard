@@ -207,6 +207,9 @@ def run_validation(
         require_all_years_profitable=bool(
             getattr(v, "require_all_years_profitable", False)
         ),
+        require_oos_windows_profitable=bool(
+            getattr(v, "require_oos_windows_profitable", True)
+        ),
         min_year_return=float(getattr(v, "min_year_return", 0.0)),
         min_year_bars=int(getattr(v, "min_year_bars", 2)),
     )
@@ -276,6 +279,9 @@ def run_validation(
             "require_all_years_profitable": bool(
                 getattr(v, "require_all_years_profitable", False)
             ),
+            "require_oos_windows_profitable": bool(
+                getattr(v, "require_oos_windows_profitable", True)
+            ),
             "min_year_return": float(getattr(v, "min_year_return", 0.0)),
         },
         "overall_pass": overall_pass,
@@ -302,8 +308,13 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         else f"{size_pct:.0%} equity notional cap"
     )
     year_gate = (
-        "required (every evaluable calendar year ≥ 0)"
+        "required (stitched calendar years ≥ 0)"
         if risk.get("require_all_years_profitable")
+        else "reported (not gated)"
+    )
+    oos_gate = (
+        "required (each OOS fold ≥ 0)"
+        if risk.get("require_oos_windows_profitable")
         else "not required"
     )
     lines = [
@@ -316,7 +327,8 @@ def _format_markdown(payload: Dict[str, Any]) -> str:
         f"- Optuna objective: `{payload.get('objective_metric', 'sharpe_ratio')}`",
         f"- Position sizing: {size_note}",
         f"- System MaxDD gate: < {float(risk.get('max_dd_limit', 0.30)):.0%}",
-        f"- Calendar-year profitability: {year_gate}",
+        f"- Calendar-year returns: {year_gate}",
+        f"- OOS-fold profitability: {oos_gate}",
         f"- **Overall pass:** {payload['overall_pass']}",
         "",
     ]

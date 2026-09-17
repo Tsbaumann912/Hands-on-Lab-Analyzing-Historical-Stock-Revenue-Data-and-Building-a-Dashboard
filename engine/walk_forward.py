@@ -214,6 +214,10 @@ class GateThresholds:
     require_all_years_profitable: bool = False
     min_year_return: float = 0.0
     min_year_bars: int = 2
+    # When True with require_all_years_profitable, enforce each OOS window's
+    # total_return >= min_year_return (WFO-native ~annual folds) in addition
+    # to stitched calendar-year returns.
+    require_oos_windows_profitable: bool = True
 
 
 @dataclass
@@ -240,12 +244,14 @@ def evaluate_gates(
     *,
     equity_curve: Optional[np.ndarray] = None,
     equity_timestamps: Optional[np.ndarray] = None,
+    oos_window_returns: Optional[Sequence[float]] = None,
 ) -> GateResult:
     """
     Hard promotion gates on stitched OOS metrics.
 
     Requires positive Sharpe, UPI, CAGR and ``abs(max_drawdown) < max_dd_limit``.
-    Optionally requires every evaluable calendar year to be profitable.
+    Optionally requires every evaluable calendar year and/or every OOS window
+    to be non-losing.
     """
     from engine.metrics import all_calendar_years_profitable
 
@@ -281,6 +287,14 @@ def evaluate_gates(
             )
             if not ok:
                 failures.extend(year_failures)
+
+    if thr.require_oos_windows_profitable and oos_window_returns is not None:
+        for i, ret in enumerate(oos_window_returns):
+            r = float(ret)
+            if not np.isfinite(r) or r < thr.min_year_return - 1e-12:
+                failures.append(
+                    f"oos_window_{i}_return={r:.6f} < {thr.min_year_return}"
+                )
 
     return GateResult(
         passed=len(failures) == 0,
@@ -344,7 +358,11 @@ class WalkForwardValidator:
                 getattr(config.cl_validation, "oos_warmup_bars", 320)
             ),
             require_all_years_profitable=bool(
-                self._thresholds.require_all_years_profitable
+                getattr(
+                    config.cl_validation,
+                    "optuna_require_years_profitable",
+                    self._thresholds.require_all_years_profitable,
+                )
             ),
             min_year_return=float(self._thresholds.min_year_return),
             min_year_bars=int(self._thresholds.min_year_bars),
@@ -415,11 +433,20 @@ class WalkForwardValidator:
             if len(stitched) >= 2
             else {}
         )
+        oos_rets: List[float] = []
+        for window in wfo.windows:
+            if window.oos_result is None:
+                oos_rets.append(float("nan"))
+                continue
+            oos_rets.append(
+                float(window.oos_result.metrics.get("total_return", float("nan")))
+            )
         gates = evaluate_gates(
             metrics,
             self._thresholds,
             equity_curve=stitched,
             equity_timestamps=stamps if len(stamps) else None,
+            oos_window_returns=oos_rets,
         )
         return ModeValidationReport(
             mode=mode,
