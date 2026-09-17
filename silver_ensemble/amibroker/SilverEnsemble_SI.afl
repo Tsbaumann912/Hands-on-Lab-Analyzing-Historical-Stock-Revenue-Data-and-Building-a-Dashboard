@@ -1,0 +1,366 @@
+//////////////////////////////////////////////////////////////////////
+// SilverEnsemble CTA — AmiBroker Formula Language (AFL) port
+// Source: QuantTerminal / silver_ensemble (Python)
+// Contract: COMEX Silver (SI), PointValue = 5000 ($ / full point)
+//
+// INSTALL
+//   1. Analysis → Formula Editor → open this file → Tools → Send to Analysis
+//   2. Analysis Settings → Positions = "Long and Short"
+//   3. Import optional symbols used by Foreign(): GC, DX-Y.NYB (or DXY), ^TNX
+//      Rename via ParamStr below to match your database tickers.
+//   4. Symbol Information for SI: TickSize 0.005, PointValue 5000, MarginDeposit
+//      (set to your broker SI initial margin; Param below overrides).
+//
+// NOTES / PROXIES
+//   - TSMOM + StochRSI/MA run on the SI chart (native OHLCV).
+//   - Carry / basis sleeves use a roll-yield PROXY from price momentum when
+//     a deferred-month series is unavailable (toggle Param).
+//   - Inventory sleeve uses Aux1 if populated, else a price z-score PROXY.
+//   - Fade sleeve uses Foreign(Gold), Foreign(DXY), Foreign(TNX) when present.
+//   - FDM is a simplified scalar (Param) — full 6x6 rolling corr is heavy in AFL.
+//   - Full YTD / peak-DD equity halts need a custom backtester phase; ATR stops
+//     are applied here via ApplyStop.
+//
+// Tuned defaults mirror silver_ensemble/config/default.yaml (all-years-positive run).
+//////////////////////////////////////////////////////////////////////
+
+//==================== PARAMETERS (match Python config) ====================
+_SECTION_BEGIN("SilverEnsemble");
+
+SetChartOptions(0, chartShowDates);
+SetPositionSize(1, spsShares); // overwritten dynamically below
+
+//--- Backtester / futures contract ---
+equity0 = Param("InitialEquity", 350000000, 100000, 1000000000, 100000);
+SetOption("InitialEquity", equity0);
+SetOption("FuturesMode", True);
+SetOption("MaxOpenPositions", 1);
+SetOption("AllowSameBarExit", False);
+SetOption("ActivateStopsImmediately", True);
+SetOption("ReverseSignalForcesExit", True);
+SetOption("CommissionMode", 3); // $ per contract
+SetOption("CommissionAmount", Param("CommissionPerContract", 2.25, 0, 25, 0.25));
+SetOption("InterestRate", Param("CollateralYieldAnnualPct", 3.42, 0, 10, 0.01)); // %
+SetOption("AccountMargin", 100);
+SetTradeDelays(0, 0, 0, 0);
+
+RoundLotSize = 1;
+TickSize = 0.005;
+PointValue = 5000; // COMEX SI: $5,000 per $1 move in price
+MarginDeposit = Param("MarginDepositUSD", 15000, 1000, 100000, 500);
+
+BuyPrice = Close;
+SellPrice = Close;
+ShortPrice = Close;
+CoverPrice = Close;
+
+//--- Ensemble knobs (Python defaults) ---
+wTsmom = Param("w_tsmom", 0.4388, 0, 1, 0.0001);
+wCarry = Param("w_carry", 0.1761, 0, 1, 0.0001);
+wBasis = Param("w_basis_mom", 0.1289, 0, 1, 0.0001);
+wInv = Param("w_inventory", 0.0998, 0, 1, 0.0001);
+wFade = Param("w_fade", 0.0443, 0, 1, 0.0001);
+wStoch = Param("w_stoch_ma", 0.1121, 0, 1, 0.0001);
+
+forecastCap = Param("ForecastCap", 20, 5, 30, 1);
+agreementMin = Param("AgreementMin", 0.3533, 0, 1, 0.0001);
+fdmScale = Param("FDMScale", 1.35, 1, 2.5677, 0.01); // simplified FDM
+volTarget = Param("VolTargetAnnual", 0.0691, 0.01, 0.30, 0.0001);
+ewmaCom = Param("EWMAVolCOM", 60, 10, 120, 1);
+kellyFrac = Param("KellyFraction", 0.2004, 0.05, 1, 0.0001);
+bufferF = Param("BufferForecast", 5.7456, 0, 10, 0.01);
+fadeZ = Param("FadeZ", 3.1703, 1, 5, 0.01);
+basisLB = Param("BasisMomLookback", 63, 20, 126, 1);
+invDelta = Param("InventoryDeltaDays", 20, 5, 60, 1);
+invSMA = Param("InventorySMA", 60, 20, 120, 1);
+priceZLB = Param("PriceZLookback", 20, 10, 60, 1);
+ratioLB = Param("RatioLookback", 63, 20, 126, 1);
+atrPeriod = Param("ATRPeriod", 14, 5, 30, 1);
+stopATRmult = Param("StopATRMult", 1.2599, 0.5, 5, 0.01);
+tpATRmult = Param("TakeProfitATRMult", 2.8857, 1, 8, 0.01);
+rsiPeriod = Param("RSIPeriod", 13, 5, 30, 1);
+stochPeriod = Param("StochRSIPeriod", 11, 5, 30, 1);
+stochSmooth = Param("StochRSISmooth", 3, 1, 10, 1);
+maFast = Param("MAFast", 13, 3, 50, 1);
+maSlow = Param("MASlow", 75, 20, 200, 1);
+stochOS = Param("StochOversold", 0.0909, 0.01, 0.4, 0.0001);
+stochOB = Param("StochOverbought", 0.7767, 0.5, 0.99, 0.0001);
+maxLeverage = Param("MaxLeverage", 4.8902, 1, 10, 0.01);
+maxContracts = Param("MaxContracts", 2500, 1, 5000, 1);
+ytdHaltPct = Param("YTDLossHaltPct", 0.0147, 0.001, 0.10, 0.0001);
+ddHaltPct = Param("MaxDDHaltPct", 0.29, 0.05, 0.50, 0.01);
+
+useCarryProxy = ParamToggle("UseCarryBasisProxy", "Off|On", 1);
+useInvProxy = ParamToggle("UseInventoryProxy", "Off|On", 1);
+useFadeForeign = ParamToggle("UseFadeForeignData", "Off|On", 1);
+enablePlot = ParamToggle("PlotForecast", "Off|On", 1);
+
+goldSym = ParamStr("GoldSymbol", "GC");
+dxySym = ParamStr("DXYSymbol", "DX-Y.NYB");
+tnxSym = ParamStr("TNXSymbol", "^TNX");
+
+//==================== HELPERS ====================
+function SafeDiv(a, b)
+{
+    return IIf(b != 0, a / b, 0);
+}
+
+function ZScore(arr, len)
+{
+    local mu, sd;
+    mu = MA(arr, len);
+    sd = StDev(arr, len);
+    return IIf(sd > 1e-12, (arr - mu) / sd, Null);
+}
+
+function Clip(arr, cap)
+{
+    return Min(cap, Max(-cap, arr));
+}
+
+function SignNZ(x)
+{
+    return IIf(x > 0, 1, IIf(x < 0, -1, 0));
+}
+
+// Stochastic RSI in [0,1]
+function StochRSI(periodRSI, periodStoch, smoothK)
+{
+    local rsi, rmin, rmax, stoch;
+    rsi = RSI(periodRSI);
+    rmin = LLV(rsi, periodStoch);
+    rmax = HHV(rsi, periodStoch);
+    stoch = SafeDiv(rsi - rmin, rmax - rmin);
+    return MA(stoch, smoothK);
+}
+
+//==================== FEATURES ====================
+ret = ROC(Close, 1) / 100; // Close/Ref(C,1)-1
+// EWMA variance proxy: AMA of ret^2 with smoothing ~ com/(com+1)
+alphaVol = 1 / (ewmaCom + 1);
+volVar = AMA(ret * ret, alphaVol);
+volAnn = sqrt(volVar * 252);
+volAnn = IIf(IsNull(volAnn) OR volAnn < 1e-8, 0.20, volAnn);
+
+atr = ATR(atrPeriod);
+
+// Optional foreign series
+goldC = Foreign(goldSym, "C");
+dxyC = Foreign(dxySym, "C");
+tnxC = Foreign(tnxSym, "C");
+
+gsRatio = IIf(NOT IsNull(goldC) AND goldC > 0 AND Close > 0, log(goldC) - log(Close), Null);
+usdRet20 = IIf(NOT IsNull(dxyC), ROC(dxyC, 20) / 100, Null);
+realYldChg = IIf(NOT IsNull(tnxC), tnxC - Ref(tnxC, -1), Null);
+
+// Inventory: Aux1 if available else inverse price z proxy
+invRaw = Aux1;
+inventory = IIf(NOT IsNull(invRaw) AND invRaw != 0, invRaw,
+             IIf(useInvProxy, -ZScore(Close, invSMA), Null));
+
+// Carry / basis proxies from price when curve unavailable
+carryProxy = ROC(Close, basisLB) / 100; // roll-yield stand-in
+basisProxy = log(Close) - log(Ref(Close, -basisLB));
+
+//==================== SLEEVE A: TSMOM ====================
+h21 = Sum(ret, 21);
+h63 = Sum(ret, 63);
+h126 = Sum(ret, 126);
+h252 = Sum(ret, 252);
+tsmom = 10 * (SignNZ(h21) + SignNZ(h63) + SignNZ(h126) + SignNZ(h252)) / 4;
+tsmom = Clip(tsmom, forecastCap);
+
+//==================== SLEEVE B: CARRY ====================
+carry = IIf(useCarryProxy, Clip(10 * ZScore(carryProxy, Max(63, basisLB)), forecastCap), 0);
+
+//==================== SLEEVE C: BASIS MOMENTUM ====================
+bm = basisProxy - Ref(basisProxy, -basisLB);
+basisMom = IIf(useCarryProxy, Clip(10 * ZScore(bm, basisLB), forecastCap), 0);
+
+//==================== SLEEVE D: INVENTORY ====================
+r63 = Sum(ret, 63);
+dInv = inventory - Ref(inventory, -invDelta);
+invF = IIf(IsNull(inventory), 0,
+        IIf(r63 > 0 AND dInv < 0, 10,
+        IIf(r63 < 0 AND dInv > 0, -10, 0)));
+invF = Clip(invF, forecastCap);
+
+//==================== SLEEVE E: FADE ====================
+fadeF = 0;
+if (useFadeForeign)
+{
+    zRatio = ZScore(gsRatio, ratioLB);
+    zPx = ZScore(Close, priceZLB);
+    fadeF = IIf(zRatio > fadeZ, 10, IIf(zRatio < -fadeZ, -10, 0));
+
+    bearMacro = (realYldChg > 0) AND (usdRet20 > 0);
+    bullMacro = (realYldChg < 0) AND (usdRet20 < 0);
+    fadeF = IIf(zPx > fadeZ AND bearMacro, -10, fadeF);
+    fadeF = IIf(zPx < -fadeZ AND bullMacro, 10, fadeF);
+
+    // Structural disable: price trend agrees with inventory scarcity signal
+    r252s = Sum(ret, 252);
+    zInv = -ZScore(inventory, invSMA);
+    structural = (SignNZ(r252s) == SignNZ(zInv)) AND (SignNZ(r252s) != 0) AND (abs(zInv) > 0.5);
+    fadeF = IIf(structural, 0, fadeF);
+
+    // Extra gate vs aligned TSMOM + inventory
+    alignedTI = (SignNZ(tsmom) == SignNZ(invF)) AND (abs(tsmom) > 5) AND (abs(invF) > 5);
+    fadeF = IIf(alignedTI, 0, fadeF);
+}
+fadeF = Clip(Nz(fadeF, 0), forecastCap);
+
+//==================== SLEEVE F: STOCH RSI + MA ====================
+maF = MA(Close, maFast);
+maS = MA(Close, maSlow);
+stoch = StochRSI(rsiPeriod, stochPeriod, stochSmooth);
+trend = SignNZ(maF - maS);
+
+strongLong = trend > 0 AND stoch <= stochOS;
+strongShort = trend < 0 AND stoch >= stochOB;
+softLong = trend > 0 AND stoch <= 0.5 AND NOT strongLong;
+softShort = trend < 0 AND stoch >= 0.5 AND NOT strongShort;
+
+stochF = IIf(strongLong, 15,
+         IIf(strongShort, -15,
+         IIf(softLong, 7.5,
+         IIf(softShort, -7.5, 0))));
+stochF = IIf(trend == 0 OR IsNull(stoch), 0, stochF);
+stochF = Clip(stochF, forecastCap);
+
+//==================== BLEND (majority-sign + agreement) ====================
+wSum = wTsmom + wCarry + wBasis + wInv + wFade + wStoch;
+wTsmom = SafeDiv(wTsmom, wSum);
+wCarry = SafeDiv(wCarry, wSum);
+wBasis = SafeDiv(wBasis, wSum);
+wInv = SafeDiv(wInv, wSum);
+wFade = SafeDiv(wFade, wSum);
+wStoch = SafeDiv(wStoch, wSum);
+
+f1 = Nz(tsmom, 0);
+f2 = Nz(carry, 0);
+f3 = Nz(basisMom, 0);
+f4 = Nz(invF, 0);
+f5 = Nz(fadeF, 0);
+f6 = Nz(stochF, 0);
+
+a1 = abs(f1) > 1;
+a2 = abs(f2) > 1;
+a3 = abs(f3) > 1;
+a4 = abs(f4) > 1;
+a5 = abs(f5) > 1;
+a6 = abs(f6) > 1;
+
+nActive = a1 + a2 + a3 + a4 + a5 + a6;
+signedSum = IIf(a1, SignNZ(f1), 0) + IIf(a2, SignNZ(f2), 0) + IIf(a3, SignNZ(f3), 0)
+          + IIf(a4, SignNZ(f4), 0) + IIf(a5, SignNZ(f5), 0) + IIf(a6, SignNZ(f6), 0);
+agreement = IIf(nActive > 0, abs(signedSum) / nActive, 0);
+maj = SignNZ(signedSum);
+
+k1 = a1 AND SignNZ(f1) == maj AND maj != 0;
+k2 = a2 AND SignNZ(f2) == maj AND maj != 0;
+k3 = a3 AND SignNZ(f3) == maj AND maj != 0;
+k4 = a4 AND SignNZ(f4) == maj AND maj != 0;
+k5 = a5 AND SignNZ(f5) == maj AND maj != 0;
+k6 = a6 AND SignNZ(f6) == maj AND maj != 0;
+
+wKeep = IIf(k1, wTsmom, 0) + IIf(k2, wCarry, 0) + IIf(k3, wBasis, 0)
+      + IIf(k4, wInv, 0) + IIf(k5, wFade, 0) + IIf(k6, wStoch, 0);
+
+rawBlend = IIf(wKeep > 0,
+    (IIf(k1, wTsmom * f1, 0) + IIf(k2, wCarry * f2, 0) + IIf(k3, wBasis * f3, 0)
+   + IIf(k4, wInv * f4, 0) + IIf(k5, wFade * f5, 0) + IIf(k6, wStoch * f6, 0)) / wKeep,
+    0);
+
+scaled = IIf(agreement < agreementMin, 0, agreement * rawBlend);
+scaled = Clip(scaled, forecastCap);
+fStarRaw = Clip(scaled * fdmScale, forecastCap);
+
+//==================== FORECAST BUFFER (sticky) ====================
+fStar = 0;
+lastF = 0;
+for (i = 0; i < BarCount; i++)
+{
+    f = fStarRaw[i];
+    if (IsNull(f))
+    {
+        fStar[i] = 0;
+    }
+    else
+    {
+        if (abs(f - lastF) >= bufferF OR (lastF == 0 AND abs(f) >= bufferF))
+            lastF = f;
+        fStar[i] = lastF;
+    }
+}
+
+//==================== POSITION SIZING (vol target → contracts) ====================
+// Notional = (F*/10) * (sigTarget / sig_t) * Equity * (kelly/0.5)
+// N = Notional / (Price * PointValue)
+scaleK = kellyFrac / 0.5;
+strength = fStar / 10;
+notional = strength * SafeDiv(volTarget, volAnn) * equity0 * scaleK;
+contractsRaw = SafeDiv(notional, Close * PointValue);
+
+// Caps
+capLev = SafeDiv(maxLeverage * equity0, Close * PointValue);
+cap = Min(maxContracts, abs(capLev));
+contracts = Min(cap, Max(-cap, contractsRaw));
+
+// Round toward nearest; enforce ±1 when |raw|>=0.5
+contractsRnd = round(contracts);
+needsMin = abs(contracts) >= 0.5 AND abs(contractsRnd) < 1 AND cap >= 1;
+contractsRnd = IIf(needsMin, SignNZ(contracts), contractsRnd);
+contractsRnd = IIf(IsNull(fStar) OR fStar == 0, 0, contractsRnd);
+
+//==================== ENTRIES / EXITS ====================
+wantLong = contractsRnd >= 1;
+wantShort = contractsRnd <= -1;
+flat = NOT wantLong AND NOT wantShort;
+
+Buy = wantLong;
+Sell = wantShort OR flat;   // exit long on flip/flat
+Short = wantShort;
+Cover = wantLong OR flat;   // exit short on flip/flat
+
+// Avoid simultaneous Buy+Sell noise
+Buy = Buy AND NOT Short;
+Short = Short AND NOT Buy;
+
+// Dynamic contract count (absolute)
+SetPositionSize(Max(1, abs(contractsRnd)), spsShares);
+
+// ATR stops / targets (points)
+ApplyStop(stopTypeLoss, stopModePoint, stopATRmult * atr, True, True);
+ApplyStop(stopTypeProfit, stopModePoint, tpATRmult * atr, True, True);
+
+// Position score for ranking (magnitude of forecast)
+PositionScore = abs(fStar);
+
+//==================== CHART / EXPLORATION ====================
+if (enablePlot)
+{
+    Plot(Close, "SI Close", colorDefault, styleCandle);
+    Plot(maF, "MA Fast", colorAqua, styleLine);
+    Plot(maS, "MA Slow", colorOrange, styleLine);
+    Plot(fStar, "F*", colorYellow, styleOwnScale | styleLine | styleThick);
+    Plot(agreement, "Agreement", colorLightBlue, styleOwnScale | styleLine);
+}
+
+Filter = 1;
+AddColumn(fStar, "F*", 1.2);
+AddColumn(agreement, "Agree", 1.3);
+AddColumn(tsmom, "TSMOM", 1.2);
+AddColumn(carry, "Carry", 1.2);
+AddColumn(basisMom, "BasisMom", 1.2);
+AddColumn(invF, "Inv", 1.2);
+AddColumn(fadeF, "Fade", 1.2);
+AddColumn(stochF, "StochMA", 1.2);
+AddColumn(contractsRnd, "Contracts", 1.0);
+AddColumn(volAnn, "VolAnn", 1.3);
+AddColumn(IIf(Buy, 1, IIf(Short, -1, 0)), "Signal", 1.0);
+
+_N(Title = StrFormat("{{NAME}} — SilverEnsemble | F*=%.2f Agree=%.2f N=%.0f Vol=%.1f%%",
+    LastValue(fStar), LastValue(agreement), LastValue(contractsRnd), 100 * LastValue(volAnn)));
+
+_SECTION_END();
