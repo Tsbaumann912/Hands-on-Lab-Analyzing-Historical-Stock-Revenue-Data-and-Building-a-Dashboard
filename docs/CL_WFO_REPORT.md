@@ -7,32 +7,32 @@
 - Optuna objective: `cagr`
 - Position sizing: uncapped (ATR/Kelly only)
 - System MaxDD gate: < 30%
-- Calendar-year returns: reported (not gated)
-- OOS-fold profitability: required (each OOS fold ≥ 0)
+- Calendar-year returns: required (stitched calendar years ≥ 0)
+- OOS-fold profitability: not required
 - **Overall pass:** False
 
 ## Anchored WFO
 
 - Windows: 15
 - Gates passed: False
-- Failures: ['oos_window_0_return=-0.078978 < 0.0', 'oos_window_2_return=-0.017180 < 0.0', 'oos_window_4_return=-0.013378 < 0.0', 'oos_window_6_return=-0.142762 < 0.0', 'oos_window_7_return=-0.040133 < 0.0', 'oos_window_10_return=-0.064538 < 0.0', 'oos_window_14_return=-0.039119 < 0.0']
-- Sharpe: 0.2437
-- UPI: 0.1621
-- CAGR: 0.016594
-- Total return: 0.278762
-- Max DD: -0.271336
-- Final equity: 447566629.60049075
-- Calendar-year returns: —
+- Failures: ['year_2012_return=-0.007364 < -0.001', 'year_2023_return=-0.024350 < -0.001']
+- Sharpe: 0.3395
+- UPI: 0.6771
+- CAGR: 0.00756
+- Total return: 0.119107
+- Max DD: -0.066847
+- Final equity: 391687451.7132487
+- Calendar-year returns: 2011: +3.57%, 2012: -0.74%, 2013: +1.31%, 2014: -0.01%, 2015: +0.51%, 2016: +1.60%, 2017: +0.21%, 2018: +0.90%, 2019: +2.23%, 2020: +1.85%, 2021: +1.98%, 2022: +0.20%, 2023: -2.44%, 2024: +2.42%, 2025: +0.00%
 
 ## Rolling WFO
 
 - Windows: 13
 - Gates passed: False
-- Failures: ['ulcer_performance_index=-0.014 <= 0.0', 'cagr=-0.002231 <= 0.0', 'abs(max_drawdown)=0.320737 >= 0.3', 'oos_window_3_return=-0.062078 < 0.0', 'oos_window_4_return=-0.142047 < 0.0', 'oos_window_5_return=-0.053533 < 0.0', 'oos_window_8_return=-0.087076 < 0.0', 'oos_window_10_return=-0.022831 < 0.0', 'oos_window_11_return=-0.021760 < 0.0', 'oos_window_12_return=-0.048316 < 0.0']
-- Sharpe: 0.0143
-- UPI: -0.014
-- CAGR: -0.002231
-- Total return: -0.028505
-- Max DD: -0.320737
-- Final equity: 340023264.51151794
-- Calendar-year returns: —
+- Failures: ['year_2019_return=-0.014434 < -0.001', 'year_2022_return=-0.014334 < -0.001', 'year_2024_return=-0.009164 < -0.001']
+- Sharpe: 0.2121
+- UPI: 0.3993
+- CAGR: 0.004773
+- Total return: 0.063598
+- Max DD: -0.043735
+- Final equity: 372259171.9308285
+- Calendar-year returns: 2013: +0.38%, 2014: +0.19%, 2015: +0.90%, 2016: +1.63%, 2017: -0.07%, 2018: +1.89%, 2019: -1.44%, 2020: +1.59%, 2021: +2.02%, 2022: -1.43%, 2023: +1.04%, 2024: -0.92%, 2025: +0.00%

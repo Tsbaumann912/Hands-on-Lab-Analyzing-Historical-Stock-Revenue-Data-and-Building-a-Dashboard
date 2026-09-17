@@ -129,10 +129,11 @@ class BacktestEngine:
             doy = int(bar.timestamp.timetuple().tm_yday)
             if year_lock_pct > 0.0 and ytd >= year_lock_pct:
                 years_locked.add(year)
-            elif year_lock_pct > 0.0 and doy >= 274 and ytd >= 0.0:
+            elif year_lock_pct > 0.0 and doy >= 60 and ytd >= 0.0:
+                # Soft-lock any non-losing YTD after ~March 1.
                 years_locked.add(year)
-            elif year_loss_stop and year in years_seen_green and ytd <= 1e-4:
-                # Previously green — freeze while still flat/tiny-green to avoid red years.
+            elif year_loss_stop and year in years_seen_green and ytd <= 5e-4:
+                # Previously green — freeze near flat to keep the year non-losing.
                 years_locked.add(year)
             if year in years_locked:
                 signal = Signal(
