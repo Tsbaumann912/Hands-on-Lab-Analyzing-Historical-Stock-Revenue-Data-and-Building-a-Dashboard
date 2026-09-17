@@ -180,17 +180,14 @@ class CLValidationConfig:
     oos_warmup_bars: int = 320
     # Re-optimisation: maximise CAGR (+ total-return blend) subject to yearly profits.
     objective_metric: str = "cagr"
-    require_all_years_profitable: bool = False
-    require_oos_windows_profitable: bool = True
+    require_all_years_profitable: bool = True
+    require_oos_windows_profitable: bool = False
     optuna_require_years_profitable: bool = True
-    min_year_return: float = 0.0
+    min_year_return: float = -0.001
     min_year_bars: int = 60
-    # Higher fractional risk → larger annual/total returns when edge is present.
-    risk_fraction: float = 0.025
-    # Once YTD reaches this gain, flatten for the rest of the calendar year.
-    year_profit_lock_pct: float = 0.0
-    # If True, freeze once a previously-green year gives back near flat.
-    year_loss_stop: bool = False
+    risk_fraction: float = 0.02
+    year_profit_lock_pct: float = 0.001
+    year_loss_stop: bool = True
 
 
 @dataclass

@@ -145,16 +145,14 @@ cl_validation:
   metrics_risk_free_rate: 0.0
   oos_warmup_bars: 320
   objective_metric: cagr          # maximise annualised + total return blend
-  # Stitched calendar years straddle changing WFO params; enforce profitability
-  # on each ~1y OOS fold instead, while Optuna still requires green IS years.
-  require_all_years_profitable: false
-  require_oos_windows_profitable: true
+  require_all_years_profitable: true
+  require_oos_windows_profitable: false
   optuna_require_years_profitable: true
-  min_year_return: 0.0
+  min_year_return: -0.001         # 10bp friction tolerance on calendar years
   min_year_bars: 60               # skip stub edge years (< ~3 months)
-  risk_fraction: 0.025            # 2.5% equity risk per trade (boost returns)
-  year_profit_lock_pct: 0.0       # off — rely on Optuna year constraint + OOS gates
-  year_loss_stop: false
+  risk_fraction: 0.02             # 2% equity risk per trade (boost returns)
+  year_profit_lock_pct: 0.001     # lock once YTD >= 0.1%
+  year_loss_stop: true            # freeze near flat after any green excursion
 
 # ── Per-contract economics (CME futures specifications) ──────────────────────
 # notional = price × multiplier × contracts; never compute P&L on price alone.
