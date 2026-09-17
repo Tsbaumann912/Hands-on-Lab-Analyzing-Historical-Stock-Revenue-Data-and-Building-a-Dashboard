@@ -14,6 +14,9 @@ class TestAnalysisConfig:
         cfg = get_analysis_config()
         assert "ES" in cfg.contracts
         assert cfg.contracts["CL"].contract_multiplier == 1000.0
+        assert "PL" in cfg.contracts
+        assert cfg.contracts["PL"].contract_multiplier == 50.0
+        assert "PA" in cfg.contracts
 
     def test_analysis_defaults(self):
         cfg = get_analysis_config()
@@ -86,3 +89,18 @@ class TestRunStrategyAnalysis:
             data_source="synthetic",
         )
         assert "error" in result
+
+    def test_platinum_tsmom_backtest(self):
+        result = run_strategy_analysis(
+            mode="backtest",
+            symbol="PL",
+            strategy_name="PlatinumTSMOM",
+            timeframe="1d",
+            start_date="2012-01-01",
+            end_date="2018-01-01",
+            data_source="synthetic",
+            initial_cash=100_000,
+        )
+        assert result.get("error") is None
+        assert result["mode"] == "backtest"
+        assert "sharpe_ratio" in result["metrics"]

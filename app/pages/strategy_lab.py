@@ -44,6 +44,8 @@ STRATEGIES = [
     {"value": "MeanReversionRSI", "label": "Mean Reversion RSI"},
     {"value": "MomentumBreakout", "label": "Momentum Breakout (Donchian)"},
     {"value": "TrendFollowingMACD", "label": "Trend Following MACD"},
+    {"value": "PlatinumTSMOM", "label": "Platinum TSMOM (multi-horizon)"},
+    {"value": "PlatinumGoldSpread", "label": "Platinum–Gold Relative Value"},
 ]
 
 CONTRACTS = [
@@ -53,6 +55,8 @@ CONTRACTS = [
     {"value": "GC", "label": "GC — Gold"},
     {"value": "NG", "label": "NG — Natural Gas"},
     {"value": "SI", "label": "SI — Silver"},
+    {"value": "PL", "label": "PL — Platinum"},
+    {"value": "PA", "label": "PA — Palladium"},
     {"value": "ZN", "label": "ZN — 10-Year T-Note"},
     {"value": "ZB", "label": "ZB — 30-Year T-Bond"},
 ]
@@ -83,6 +87,9 @@ PARAM_LABELS = {
     "lookback": "Lookback",
     "sma_short": "SMA Short",
     "sma_long": "SMA Long",
+    "entry_z_score": "Entry Z-Score",
+    "exit_z_score": "Exit Z-Score",
+    "rv_lookback": "RV Lookback",
 }
 
 OBJECTIVE_LABELS = {

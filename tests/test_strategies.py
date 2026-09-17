@@ -179,3 +179,58 @@ class TestPositionTracking:
     def test_unknown_symbol_returns_flat(self, default_config: Config):
         strategy = MeanReversionRSI(default_config)
         assert strategy.current_position("UNKNOWN") == Direction.FLAT
+
+
+# ── Platinum strategies ───────────────────────────────────────────────────────
+
+class TestPlatinumTSMOM:
+    def test_emits_signal_contract(self, default_config: Config):
+        from strategies.platinum_tsmom import PlatinumTSMOM
+
+        strategy = PlatinumTSMOM(default_config, symbols=["PL.c.0"])
+        # Strong uptrend so multi-horizon signs agree
+        n = 320
+        base = 1000.0
+        bars = []
+        from datetime import datetime, timedelta, timezone
+        from core.enums import AssetClass
+        from core.models import Bar
+
+        ts0 = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        for i in range(n):
+            px = base * (1.001 ** i)
+            bars.append(
+                Bar(
+                    symbol="PL.c.0",
+                    timestamp=ts0 + timedelta(days=i),
+                    open=px * 0.999,
+                    high=px * 1.002,
+                    low=px * 0.998,
+                    close=px,
+                    volume=1000.0,
+                    asset_class=AssetClass.FUTURES,
+                )
+            )
+        last = None
+        for b in bars:
+            last = strategy.update(b)
+        assert last is not None
+        assert last.symbol == "PL.c.0"
+        assert 0.0 <= last.strength <= 1.0
+        assert last.direction in (Direction.LONG, Direction.SHORT, Direction.FLAT)
+        # After a long uptrend expect LONG once buffer is warm
+        assert last.direction == Direction.LONG
+
+
+class TestPlatinumGoldSpread:
+    def test_emits_signal_contract(self, default_config: Config):
+        from strategies.platinum_gold_spread import PlatinumGoldSpread
+
+        strategy = PlatinumGoldSpread(default_config, symbols=["PL.c.0"])
+        bars = make_bars(n=250, symbol="PL.c.0", start_price=1000.0, volatility=8.0, seed=5)
+        last = None
+        for b in bars:
+            last = strategy.update(b)
+        assert last is not None
+        assert last.strategy_name == "PlatinumGoldSpread"
+        assert "z" in last.metadata or last.direction == Direction.FLAT

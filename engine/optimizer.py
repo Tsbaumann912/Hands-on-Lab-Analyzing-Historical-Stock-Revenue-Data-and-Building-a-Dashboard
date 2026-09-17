@@ -40,6 +40,8 @@ STRATEGY_PARAM_SPACES: Dict[str, List[str]] = {
     ],
     "MomentumBreakout": ["lookback", "atr_period"],
     "TrendFollowingMACD": ["atr_period", "sma_short", "sma_long"],
+    "PlatinumTSMOM": ["lookback", "atr_period"],
+    "PlatinumGoldSpread": ["rv_lookback", "entry_z_score", "exit_z_score", "atr_period"],
 }
 
 

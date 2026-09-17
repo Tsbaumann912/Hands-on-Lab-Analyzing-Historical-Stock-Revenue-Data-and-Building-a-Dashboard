@@ -25,6 +25,8 @@ FUTURES_CONTRACTS = [
     {"value": "ZB", "label": "ZB — 30-Year T-Bond"},
     {"value": "SI", "label": "SI — Silver"},
     {"value": "NG", "label": "NG — Natural Gas"},
+    {"value": "PL", "label": "PL — Platinum"},
+    {"value": "PA", "label": "PA — Palladium"},
 ]
 
 OVERLAY_OPTIONS = [

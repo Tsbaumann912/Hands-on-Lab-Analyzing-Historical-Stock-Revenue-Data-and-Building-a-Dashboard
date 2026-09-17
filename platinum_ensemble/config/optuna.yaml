@@ -1,0 +1,76 @@
+n_trials: 150
+timeout_seconds: 900
+optimize_scope: full
+is_end_date: '2019-12-31'
+seed: 11
+min_fills: 30
+require_all_years_positive: true
+# Maximise mean calendar-year + total return with every year green.
+vol_target_annual:
+  type: float
+  low: 0.12
+  high: 0.35
+kelly_fraction:
+  type: float
+  low: 0.35
+  high: 0.55
+agreement_min:
+  type: float
+  low: 0.0
+  high: 0.2
+fade_z:
+  type: float
+  low: 0.7
+  high: 1.2
+buffer_forecast:
+  type: float
+  low: 2.0
+  high: 5.0
+rv_entry_z:
+  type: float
+  low: 1.0
+  high: 2.0
+fdm_cap:
+  type: float
+  low: 1.8
+  high: 3.0
+stop_atr_mult:
+  type: float
+  low: 2.0
+  high: 4.0
+max_position_size_pct:
+  type: float
+  low: 0.25
+  high: 0.50
+max_leverage:
+  type: float
+  low: 2.5
+  high: 4.5
+weight_tsmom:
+  type: float
+  low: 0.0
+  high: 0.0
+weight_carry:
+  type: float
+  low: 0.0
+  high: 0.0
+weight_pl_gc_rv:
+  type: float
+  low: 0.0
+  high: 0.0
+weight_inventory:
+  type: float
+  low: 0.25
+  high: 0.55
+weight_fade:
+  type: float
+  low: 0.45
+  high: 0.75
+short_scale:
+  type: float
+  low: 0.0
+  high: 0.0
+year_profit_lock_pct:
+  type: float
+  low: 0.001
+  high: 0.012

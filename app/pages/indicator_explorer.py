@@ -16,7 +16,7 @@ from app.theme import COLORS
 from app.data_service import get_synthetic_futures_bars, compute_indicators_for_ui
 
 
-CONTRACTS = ["ES", "NQ", "CL", "GC", "ZN", "SI", "NG", "ZB"]
+CONTRACTS = ["ES", "NQ", "CL", "GC", "ZN", "SI", "NG", "ZB", "PL", "PA"]
 
 
 def _full_indicator_dashboard(contract: str, n_bars: int) -> go.Figure:

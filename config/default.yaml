@@ -33,6 +33,9 @@ strategy:
   exit_z_score: 0.5
   lookback: 50
   signal_strength_scaling: true
+  tsmom_horizons: [21, 63, 252]
+  rv_lookback: 63
+  gold_ticker: GC=F
 
 risk:
   max_daily_drawdown_pct: 0.03    # 3% daily drawdown circuit breaker
@@ -145,6 +148,22 @@ contracts:
     tick_value: 25.00
     commission_per_contract: 2.25
     synthetic_start_price: 22.0
+  PL:
+    name: Platinum
+    yfinance_ticker: PL=F
+    contract_multiplier: 50.0
+    tick_size: 0.10
+    tick_value: 5.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 1000.0
+  PA:
+    name: Palladium
+    yfinance_ticker: PA=F
+    contract_multiplier: 100.0
+    tick_size: 0.10
+    tick_value: 10.00
+    commission_per_contract: 2.25
+    synthetic_start_price: 1000.0
   ZN:
     name: 10-Year T-Note
     yfinance_ticker: ZN=F
@@ -199,3 +218,11 @@ market_intelligence:
       label: Natural Gas
       yfinance_ticker: NG=F
       color: "#ff9500"
+    - symbol: PL
+      label: Platinum
+      yfinance_ticker: PL=F
+      color: "#a2845e"
+    - symbol: PA
+      label: Palladium
+      yfinance_ticker: PA=F
+      color: "#8e8e93"
