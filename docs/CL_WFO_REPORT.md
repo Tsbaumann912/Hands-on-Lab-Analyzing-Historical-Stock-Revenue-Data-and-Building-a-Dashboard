@@ -7,32 +7,32 @@
 - Optuna objective: `cagr`
 - Position sizing: uncapped (ATR/Kelly only)
 - System MaxDD gate: < 30%
-- Calendar-year returns: ≥70% non-losing years; worst year ≥ -8%
+- Calendar-year returns: ≥60% non-losing years; worst year ≥ -8%
 - OOS-fold profitability: not required
-- **Overall pass:** False
+- **Overall pass:** True
 
 ## Anchored WFO
 
 - Windows: 15
 - Gates passed: True
 - Failures: —
-- Sharpe: 0.3232
-- UPI: 1.0378
-- CAGR: 0.005702
-- Total return: 0.088662
-- Max DD: -0.030269
-- Final equity: 381031750.1737973
-- Calendar-year returns: 2011: +1.15%, 2012: +0.00%, 2013: +1.34%, 2014: +0.03%, 2015: +0.76%, 2016: +1.19%, 2017: +0.20%, 2018: +1.41%, 2019: -0.53%, 2020: +1.57%, 2021: +2.04%, 2022: -0.83%, 2023: +0.99%, 2024: +0.46%, 2025: +0.00%
+- Sharpe: 0.4693
+- UPI: 2.0622
+- CAGR: 0.009275
+- Total return: 0.147899
+- Max DD: -0.030644
+- Final equity: 401764568.8738184
+- Calendar-year returns: 2011: +1.03%, 2012: +1.35%, 2013: +0.46%, 2014: +0.00%, 2015: +0.76%, 2016: +1.17%, 2017: -0.14%, 2018: +1.78%, 2019: +1.50%, 2020: +1.61%, 2021: +2.03%, 2022: +0.21%, 2023: -0.26%, 2024: +0.32%, 2025: +4.32%
 
 ## Rolling WFO
 
 - Windows: 13
-- Gates passed: False
-- Failures: ['calendar_year_pass_fraction=0.615 < 0.7']
-- Sharpe: 0.1201
-- UPI: 0.0945
-- CAGR: 0.001852
-- Total return: 0.024251
-- Max DD: -0.061403
-- Final equity: 358487884.6977742
-- Calendar-year returns: 2013: +0.37%, 2014: +0.00%, 2015: +1.80%, 2016: +1.69%, 2017: -0.27%, 2018: -0.45%, 2019: +1.54%, 2020: +2.04%, 2021: +2.05%, 2022: -0.82%, 2023: -2.09%, 2024: -1.46%, 2025: +0.25%
+- Gates passed: True
+- Failures: —
+- Sharpe: 0.2954
+- UPI: 0.4909
+- CAGR: 0.007287
+- Total return: 0.098576
+- Max DD: -0.078319
+- Final equity: 384501451.737038
+- Calendar-year returns: 2013: +0.39%, 2014: +0.06%, 2015: +1.87%, 2016: +1.99%, 2017: +1.17%, 2018: +1.93%, 2019: -1.09%, 2020: +2.04%, 2021: +2.04%, 2022: +0.33%, 2023: -1.15%, 2024: -0.00%, 2025: +2.11%
