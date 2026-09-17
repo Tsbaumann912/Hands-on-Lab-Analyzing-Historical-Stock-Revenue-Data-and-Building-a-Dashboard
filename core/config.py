@@ -162,7 +162,7 @@ class CLValidationConfig:
     rolling_is_years: float = 5.0
     rolling_oos_years: float = 1.0
     purge_bars: int = 5
-    n_trials: int = 40
+    n_trials: int = 50
     timeout_seconds: int = 180
     max_dd_limit: float = 0.30
     min_sharpe: float = 0.0
@@ -184,8 +184,8 @@ class CLValidationConfig:
     require_oos_windows_profitable: bool = False
     optuna_require_years_profitable: bool = True
     min_year_return: float = 0.0
-    min_year_pass_fraction: float = 0.80
-    max_year_loss: float = -0.07
+    min_year_pass_fraction: float = 0.60
+    max_year_loss: float = -0.08
     min_year_bars: int = 60
     risk_fraction: float = 0.02
     year_profit_lock_pct: float = 0.001

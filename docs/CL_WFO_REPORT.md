@@ -7,32 +7,32 @@
 - Optuna objective: `cagr`
 - Position sizing: uncapped (ATR/Kelly only)
 - System MaxDD gate: < 30%
-- Calendar-year returns: ≥80% non-losing years; worst year ≥ -7%
+- Calendar-year returns: ≥70% non-losing years; worst year ≥ -8%
 - OOS-fold profitability: not required
 - **Overall pass:** False
 
 ## Anchored WFO
 
 - Windows: 15
-- Gates passed: False
-- Failures: ['calendar_year_pass_fraction=0.733 < 0.8']
-- Sharpe: 0.0379
-- UPI: 0.0153
-- CAGR: 0.00059
-- Total return: 0.008854
-- Max DD: -0.077198
-- Final equity: 353098825.6948612
-- Calendar-year returns: 2011: -6.30%, 2012: -0.09%, 2013: +0.03%, 2014: +0.47%, 2015: +0.77%, 2016: +1.67%, 2017: -0.37%, 2018: +0.90%, 2019: +0.79%, 2020: +1.53%, 2021: +2.05%, 2022: +1.14%, 2023: +0.16%, 2024: +0.75%, 2025: -0.20%
+- Gates passed: True
+- Failures: —
+- Sharpe: 0.3232
+- UPI: 1.0378
+- CAGR: 0.005702
+- Total return: 0.088662
+- Max DD: -0.030269
+- Final equity: 381031750.1737973
+- Calendar-year returns: 2011: +1.15%, 2012: +0.00%, 2013: +1.34%, 2014: +0.03%, 2015: +0.76%, 2016: +1.19%, 2017: +0.20%, 2018: +1.41%, 2019: -0.53%, 2020: +1.57%, 2021: +2.04%, 2022: -0.83%, 2023: +0.99%, 2024: +0.46%, 2025: +0.00%
 
 ## Rolling WFO
 
 - Windows: 13
 - Gates passed: False
-- Failures: ['calendar_year_pass_fraction=0.462 < 0.8']
-- Sharpe: 0.2765
-- UPI: 0.2259
-- CAGR: 0.004415
-- Total return: 0.058694
-- Max DD: -0.070764
-- Final equity: 370542890.6343197
-- Calendar-year returns: 2013: +0.78%, 2014: -1.03%, 2015: +1.81%, 2016: +1.65%, 2017: -0.35%, 2018: +2.79%, 2019: -0.37%, 2020: +1.74%, 2021: +2.05%, 2022: -1.10%, 2023: -2.06%, 2024: -0.51%, 2025: -0.21%
+- Failures: ['calendar_year_pass_fraction=0.615 < 0.7']
+- Sharpe: 0.1201
+- UPI: 0.0945
+- CAGR: 0.001852
+- Total return: 0.024251
+- Max DD: -0.061403
+- Final equity: 358487884.6977742
+- Calendar-year returns: 2013: +0.37%, 2014: +0.00%, 2015: +1.80%, 2016: +1.69%, 2017: -0.27%, 2018: -0.45%, 2019: +1.54%, 2020: +2.04%, 2021: +2.05%, 2022: -0.82%, 2023: -2.09%, 2024: -1.46%, 2025: +0.25%

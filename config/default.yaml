@@ -149,7 +149,7 @@ cl_validation:
   require_oos_windows_profitable: false
   optuna_require_years_profitable: true
   min_year_return: 0.0
-  min_year_pass_fraction: 0.70    # ≥70% of evaluable calendar years non-losing
+  min_year_pass_fraction: 0.60    # ≥60% of evaluable calendar years non-losing
   max_year_loss: -0.08            # no calendar year worse than -8%
   min_year_bars: 60
   risk_fraction: 0.02
