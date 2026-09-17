@@ -82,18 +82,26 @@ class RiskManager:
         self._trading_halted: bool = False
         self._halt_reason: Optional[str] = None
         self._atr_cache: Dict[str, float] = {}   # symbol → latest ATR
+        self._ref_price_override: Optional[float] = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def evaluate(self, signal: Signal) -> RiskDecision:
+    def evaluate(self, signal: Signal, ref_price: Optional[float] = None) -> RiskDecision:
         """
         Evaluate a strategy signal against all risk rules.
 
         Returns a ``RiskDecision`` with ``approved=True`` only if *all*
         hard limits are satisfied. Soft violations are noted but do not
         block execution.
+
+        Parameters
+        ----------
+        ref_price:
+            Optional live/bar price used for notional sizing. Preferred over
+            signal metadata when provided.
         """
         violations: List[RiskViolation] = []
+        self._ref_price_override = ref_price
 
         # ── Rule 1: Trading halt circuit breaker ──────────────────────────────
         if self._trading_halted:
@@ -150,8 +158,9 @@ class RiskManager:
 
         # ── Rule 4: Position sizing ────────────────────────────────────────────
         equity = self._portfolio.total_equity
-        max_notional = equity * self._cfg.max_position_size_pct
         contract_multiplier = self._portfolio_cfg.contract_multiplier
+        # ``max_position_size_pct <= 0`` means uncapped (no notional ceiling).
+        size_cap_pct = float(self._cfg.max_position_size_pct)
 
         # Compute ATR-based contract quantity if signal has no suggested size
         suggested_qty = signal.suggested_size or self._kelly_size(
@@ -159,16 +168,18 @@ class RiskManager:
         )
         notional = suggested_qty * self._current_price(signal) * contract_multiplier
 
-        if notional > max_notional:
-            # Scale down to the maximum allowed notional
-            suggested_qty = max_notional / (
-                self._current_price(signal) * contract_multiplier + 1e-9
-            )
-            msg = (
-                f"Notional {notional:.2f} > max {max_notional:.2f}. "
-                f"Qty scaled to {suggested_qty:.2f}."
-            )
-            logger.info(msg)
+        if size_cap_pct > 0.0:
+            max_notional = equity * size_cap_pct
+            if notional > max_notional:
+                # Scale down to the maximum allowed notional
+                suggested_qty = max_notional / (
+                    self._current_price(signal) * contract_multiplier + 1e-9
+                )
+                msg = (
+                    f"Notional {notional:.2f} > max {max_notional:.2f}. "
+                    f"Qty scaled to {suggested_qty:.2f}."
+                )
+                logger.info(msg)
 
         if suggested_qty < 1.0:
             suggested_qty = 1.0         # minimum 1 contract
@@ -208,7 +219,8 @@ class RiskManager:
         Uses 1% of equity as default risk per trade, sized by ATR stop distance.
         """
         atr_val = self._atr_cache.get(signal.symbol, 10.0)
-        risk_per_trade = equity * 0.01  # 1 % risk
+        risk_frac = float(getattr(self._cfg, "risk_fraction", 0.01) or 0.01)
+        risk_per_trade = equity * max(risk_frac, 0.0)
 
         stop_distance = (
             abs(signal.stop_loss - self._current_price(signal))
@@ -222,10 +234,20 @@ class RiskManager:
         qty = risk_per_trade / (stop_distance * contract_multiplier)
         return max(1.0, round(qty, 0))
 
-    @staticmethod
-    def _current_price(signal: Signal) -> float:
-        """Extract a reference price from the signal metadata, defaulting to 0."""
-        return float(signal.metadata.get("price", signal.metadata.get("close", 1.0)))
+    def _current_price(self, signal: Signal) -> float:
+        """Prefer bar override, then signal metadata; never default to $1."""
+        if self._ref_price_override is not None and self._ref_price_override > 0:
+            return float(self._ref_price_override)
+        for key in ("price", "close", "atr"):
+            # atr is last-resort scale only — skip for sizing
+            if key == "atr":
+                continue
+            if key in signal.metadata and signal.metadata[key] is not None:
+                val = float(signal.metadata[key])
+                if val > 0:
+                    return val
+        # Last resort: avoid $1 ghost price that oversizes CL (mult=1000).
+        return 100.0
 
     def _apply_default_stops(self, signal: Signal, qty: float) -> Signal:
         """Return a new Signal with stop/TP populated from ATR defaults if absent."""

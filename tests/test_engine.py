@@ -55,7 +55,8 @@ class TestComputeMetrics:
         metrics = compute_metrics(eq)
         required_keys = {
             "total_return", "cagr", "sharpe_ratio", "sortino_ratio",
-            "max_drawdown", "calmar_ratio", "win_rate", "profit_factor",
+            "max_drawdown", "ulcer_index", "ulcer_performance_index",
+            "calmar_ratio", "win_rate", "profit_factor",
             "var_95", "cvar_95",
         }
         assert required_keys.issubset(metrics.keys())

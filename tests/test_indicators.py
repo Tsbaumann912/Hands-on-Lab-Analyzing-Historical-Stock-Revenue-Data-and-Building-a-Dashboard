@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from indicators.momentum import rsi, macd, stochastic_oscillator
+from indicators.momentum import rsi, macd, stochastic_oscillator, stochastic_rsi
 from indicators.trend import sma, ema, wma, supertrend
 from indicators.volatility import atr, bollinger_bands, historical_volatility, keltner_channels
 from indicators.volume import obv, vwap, volume_oscillator
@@ -89,6 +89,27 @@ class TestMACD:
         np.testing.assert_allclose(
             result.histogram[valid_mask], diff, atol=1e-9
         )
+
+
+# ── Stochastic RSI ────────────────────────────────────────────────────────────
+
+class TestStochasticRSI:
+    def test_returns_none_on_short_series(self):
+        assert stochastic_rsi(np.ones(20)) is None
+
+    def test_named_tuple_and_range(self, price_series):
+        result = stochastic_rsi(price_series, rsi_period=14, stoch_period=14, k_period=3, d_period=3)
+        assert result is not None
+        assert len(result.pct_k) == len(price_series)
+        valid = result.pct_k[np.isfinite(result.pct_k)]
+        assert len(valid) > 0
+        assert (valid >= 0.0).all() and (valid <= 100.0).all()
+
+    def test_k_and_d_finite_after_warmup(self, price_series):
+        result = stochastic_rsi(price_series)
+        assert result is not None
+        assert np.isfinite(result.pct_k[-1])
+        assert np.isfinite(result.pct_d[-1])
 
 
 # ── Bollinger Bands ───────────────────────────────────────────────────────────

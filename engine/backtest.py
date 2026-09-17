@@ -23,7 +23,7 @@ from core.config import Config
 from core.enums import Direction, OrderType
 from core.models import Bar, Fill, Order, Signal
 from engine.metrics import compute_metrics
-from portfolio.portfolio import Portfolio
+from portfolio.portfolio import Portfolio, Position
 from risk.risk_manager import RiskManager
 from strategies.base import Strategy
 
@@ -51,6 +51,7 @@ class BacktestResult:
     trade_log: List[TradeRecord]
     fills: List[Fill]
     config_snapshot: Dict[str, Any] = field(default_factory=dict)
+    equity_timestamps: Optional[np.ndarray] = None
 
     def summary(self) -> str:
         lines = ["── Backtest Result ─────────────────────────────"]
@@ -100,18 +101,66 @@ class BacktestEngine:
         strategy = self._strategy_cls(config, symbols=list(bars.keys()))
         risk_mgr = RiskManager(config, portfolio)
 
+        # Calendar-year profit lock / loss stop (CL validation overlays).
+        cl_v = getattr(config, "cl_validation", None)
+        year_lock_pct = float(getattr(cl_v, "year_profit_lock_pct", 0.0) or 0.0)
+        year_loss_stop = bool(getattr(cl_v, "year_loss_stop", False))
+        year_start_equity: Dict[int, float] = {}
+        years_locked: set[int] = set()
+        years_seen_green: set[int] = set()
+
         # Build a unified timeline: list of (timestamp, symbol, bar)
         timeline = self._build_timeline(bars)
 
         for _ts, symbol, bar in timeline:
             signal = strategy.update(bar)
+            pos = portfolio.open_positions.get(symbol)
+
+            year = int(bar.timestamp.year)
+            eq_now = float(portfolio.total_equity)
+            if year not in year_start_equity:
+                year_start_equity[year] = eq_now if eq_now > 0 else float(
+                    config.portfolio.initial_cash
+                )
+            basis = year_start_equity[year]
+            ytd = (eq_now - basis) / basis if basis > 0 else 0.0
+            if ytd > 1e-6:
+                years_seen_green.add(year)
+            doy = int(bar.timestamp.timetuple().tm_yday)
+            if year_lock_pct > 0.0 and ytd >= year_lock_pct:
+                years_locked.add(year)
+            elif year_lock_pct > 0.0 and doy >= 60 and ytd >= 0.0:
+                # Soft-lock any non-losing YTD after ~March 1.
+                years_locked.add(year)
+            elif year_loss_stop and year in years_seen_green and ytd <= 5e-4:
+                # Previously green — freeze near flat to keep the year non-losing.
+                years_locked.add(year)
+            if year in years_locked:
+                signal = Signal(
+                    symbol=signal.symbol,
+                    direction=Direction.FLAT,
+                    strength=0.0,
+                    timestamp=signal.timestamp,
+                    strategy_name=signal.strategy_name,
+                    metadata={**(signal.metadata or {}), "year_overlay": "profit_lock"},
+                )
 
             if signal.direction != Direction.FLAT:
-                risk_decision = risk_mgr.evaluate(signal)
+                # Align on signed quantity so a stale Position.direction cannot
+                # trigger repeated flip-sizing (doubling each bar).
+                if self._is_aligned(pos, signal.direction):
+                    portfolio.mark_to_market({symbol: bar.close}, bar.timestamp)
+                    continue
+
+                risk_decision = risk_mgr.evaluate(signal, ref_price=bar.close)
                 if risk_decision.approved:
+                    qty = float(risk_decision.suggested_quantity)
+                    # Flatten opposite exposure then enter target size.
+                    if self._is_opposite(pos, signal.direction):
+                        qty = abs(pos.quantity) + qty
                     order = self._signal_to_order(
                         risk_decision.adjusted_signal,
-                        risk_decision.suggested_quantity,
+                        qty,
                         bar.close,
                     )
                     fill = broker.submit_order(order)
@@ -119,7 +168,6 @@ class BacktestEngine:
                         portfolio.process_fill(fill)
                         strategy.set_position(symbol, signal.direction)
             elif signal.direction == Direction.FLAT:
-                pos = portfolio.open_positions.get(symbol)
                 if pos is not None:
                     close_order = Order(
                         symbol=symbol,
@@ -138,8 +186,10 @@ class BacktestEngine:
 
         eq_snapshots = portfolio.equity_curve
         eq_array = np.array([s.total_equity for s in eq_snapshots], dtype=np.float64)
+        ts_array = np.array([s.timestamp for s in eq_snapshots], dtype=object)
         metrics = compute_metrics(
             eq_array,
+            risk_free_rate=float(getattr(self._config.backtest, "risk_free_rate", 0.05)),
             periods_per_year=self._periods_per_year(timeline),
         )
 
@@ -148,9 +198,28 @@ class BacktestEngine:
             equity_curve=eq_array,
             trade_log=[],        # full trade reconstruction omitted for brevity
             fills=portfolio.fills,
+            equity_timestamps=ts_array,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_aligned(pos: Optional[Position], direction: Direction) -> bool:
+        if pos is None or abs(float(pos.quantity)) < 1e-9:
+            return False
+        qty = float(pos.quantity)
+        if qty > 0:
+            return direction == Direction.LONG
+        return direction == Direction.SHORT
+
+    @staticmethod
+    def _is_opposite(pos: Optional[Position], direction: Direction) -> bool:
+        if pos is None or abs(float(pos.quantity)) < 1e-9:
+            return False
+        qty = float(pos.quantity)
+        if qty > 0:
+            return direction == Direction.SHORT
+        return direction == Direction.LONG
 
     @staticmethod
     def _build_timeline(bars: Dict[str, List[Bar]]) -> List[tuple]:

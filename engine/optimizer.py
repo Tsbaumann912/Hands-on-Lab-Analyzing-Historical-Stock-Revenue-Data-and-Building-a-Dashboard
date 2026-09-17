@@ -40,6 +40,36 @@ STRATEGY_PARAM_SPACES: Dict[str, List[str]] = {
     ],
     "MomentumBreakout": ["lookback", "atr_period"],
     "TrendFollowingMACD": ["atr_period", "sma_short", "sma_long"],
+    "CLCarryCurve": [
+        "carry_back_month",
+        "carry_basis_lookback",
+        "carry_strength_atr_mult",
+        "atr_period",
+    ],
+    "CLCarryMomentum": [
+        "carry_back_month",
+        "carry_mom_lookback",
+        "carry_mom_z_max",
+        "fast_ma_period",
+        "slow_ma_period",
+        "stoch_rsi_period",
+        "stoch_rsi_oversold",
+        "stoch_rsi_overbought",
+        "atr_period",
+    ],
+    "CLVolTargetTSMOM": [
+        "tsmom_horizon_short",
+        "tsmom_horizon_med",
+        "tsmom_horizon_long",
+        "vol_target_annual",
+        "reaction_b",
+    ],
+    "CLInventoryConfirm": [
+        "carry_back_month",
+        "inventory_sma",
+        "inventory_expect_window",
+        "atr_period",
+    ],
 }
 
 
@@ -180,11 +210,19 @@ class WalkForwardOptimizer:
         strategy_cls: Type[Strategy],
         search_space: SearchSpace,
         objective_metric: str = "sharpe_ratio",
+        oos_warmup_bars: int = 320,
+        require_all_years_profitable: bool = False,
+        min_year_return: float = 0.0,
+        min_year_bars: int = 2,
     ) -> None:
         self._config = config
         self._strategy_cls = strategy_cls
         self._search_space = search_space
         self._objective_metric = objective_metric
+        self._oos_warmup_bars = max(0, int(oos_warmup_bars))
+        self._require_all_years_profitable = bool(require_all_years_profitable)
+        self._min_year_return = float(min_year_return)
+        self._min_year_bars = max(2, int(min_year_bars))
         self._engine = BacktestEngine(config, strategy_cls)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -196,6 +234,13 @@ class WalkForwardOptimizer:
         in_sample_ratio: float = 0.70,
         n_trials: int = 50,
         timeout: Optional[int] = 120,
+        mode: str = "legacy_blocks",
+        *,
+        min_is_bars: Optional[int] = None,
+        is_bars: Optional[int] = None,
+        oos_bars: Optional[int] = None,
+        step_bars: Optional[int] = None,
+        purge_bars: int = 0,
     ) -> WFOResult:
         """
         Execute walk-forward optimisation.
@@ -205,20 +250,60 @@ class WalkForwardOptimizer:
         bars:
             Full multi-symbol bar dataset.
         n_windows:
-            Number of rolling WFO windows.
+            Number of windows when ``mode="legacy_blocks"``.
         in_sample_ratio:
-            Fraction of each window used for IS optimisation.
+            Fraction of each legacy block used for IS optimisation.
         n_trials:
             Number of Optuna trials per IS window.
         timeout:
             Maximum seconds per Optuna study (``None`` = unlimited).
+        mode:
+            ``legacy_blocks`` (default, Strategy Lab), ``anchored``, or ``rolling``.
         """
         if not HAS_OPTUNA:
             raise RuntimeError(
                 "optuna not installed. Run: pip install optuna"
             )
 
-        windows = self._build_windows(bars, n_windows, in_sample_ratio)
+        mode_l = (mode or "legacy_blocks").lower().strip()
+        if mode_l == "legacy_blocks":
+            windows = self._build_windows(bars, n_windows, in_sample_ratio)
+        else:
+            from engine.walk_forward import (
+                build_anchored_windows,
+                build_rolling_windows,
+                years_to_bars,
+            )
+
+            if mode_l == "anchored":
+                min_is = min_is_bars if min_is_bars is not None else years_to_bars(3)
+                oos = oos_bars if oos_bars is not None else years_to_bars(1)
+                step = step_bars if step_bars is not None else oos
+                windows = build_anchored_windows(bars, min_is, oos, step)
+            elif mode_l == "rolling":
+                is_len = is_bars if is_bars is not None else years_to_bars(5)
+                oos = oos_bars if oos_bars is not None else years_to_bars(1)
+                step = step_bars if step_bars is not None else oos
+                windows = build_rolling_windows(
+                    bars, is_len, oos, step, purge_bars=purge_bars
+                )
+            else:
+                raise ValueError(f"Unknown WFO mode: {mode!r}")
+
+        return self.run_on_windows(windows, n_trials=n_trials, timeout=timeout)
+
+    def run_on_windows(
+        self,
+        windows: List[WFOWindow],
+        n_trials: int = 50,
+        timeout: Optional[int] = 120,
+    ) -> WFOResult:
+        """Optimise each provided window's IS segment and evaluate on OOS."""
+        if not HAS_OPTUNA:
+            raise RuntimeError(
+                "optuna not installed. Run: pip install optuna"
+            )
+
         oos_metrics_list: List[Dict[str, float]] = []
         best_params_list: List[Dict[str, Any]] = []
 
@@ -235,7 +320,9 @@ class WalkForwardOptimizer:
                 window.window_id,
                 best_params,
             )
-            oos_result = self._engine.run(window.oos_bars, strategy_params=best_params)
+            oos_result = self._evaluate_oos(
+                window.is_bars, window.oos_bars, best_params
+            )
             window.oos_result = oos_result
             oos_metrics_list.append(oos_result.metrics)
             best_params_list.append(best_params)
@@ -246,6 +333,63 @@ class WalkForwardOptimizer:
             windows=windows,
             aggregated_oos_metrics=aggregated,
             best_params_per_window=best_params_list,
+        )
+
+    def _evaluate_oos(
+        self,
+        is_bars: Dict[str, List[Bar]],
+        oos_bars: Dict[str, List[Bar]],
+        params: Dict[str, Any],
+    ) -> BacktestResult:
+        """
+        Run OOS with trailing IS bars prepended as indicator warm-up.
+
+        Equity / metrics are trimmed to the OOS segment only so warm-up P&L
+        does not leak into out-of-sample scores.
+        """
+        from engine.metrics import compute_metrics
+
+        warmup = self._oos_warmup_bars
+        combined: Dict[str, List[Bar]] = {}
+        warm_n = 0
+        for sym, oos in oos_bars.items():
+            is_sym = is_bars.get(sym, [])
+            warm = is_sym[-warmup:] if warmup > 0 else []
+            warm_n = len(warm)
+            combined[sym] = list(warm) + list(oos)
+
+        result = self._engine.run(combined, strategy_params=params)
+        eq = np.asarray(result.equity_curve, dtype=np.float64)
+        ts = result.equity_timestamps
+        if warm_n > 0 and len(eq) > warm_n:
+            oos_eq = eq[warm_n:]
+            oos_ts = ts[warm_n:] if ts is not None and len(ts) == len(eq) else None
+        else:
+            oos_eq = eq
+            oos_ts = ts if ts is not None and len(ts) == len(eq) else None
+
+        if len(oos_eq) >= 2:
+            # Rebase to the configured starting cash so window metrics are
+            # comparable across folds (returns unchanged by a positive scale).
+            cash0 = float(self._config.portfolio.initial_cash)
+            if oos_eq[0] != 0.0 and np.isfinite(oos_eq[0]):
+                oos_eq = oos_eq * (cash0 / oos_eq[0])
+            metrics = compute_metrics(
+                oos_eq,
+                risk_free_rate=float(
+                    getattr(self._config.backtest, "risk_free_rate", 0.05)
+                ),
+            )
+        else:
+            metrics = {}
+
+        return BacktestResult(
+            metrics=metrics,
+            equity_curve=oos_eq,
+            trade_log=result.trade_log,
+            fills=result.fills,
+            config_snapshot=result.config_snapshot,
+            equity_timestamps=oos_ts,
         )
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -261,12 +405,50 @@ class WalkForwardOptimizer:
         def objective(trial: "optuna.Trial") -> float:  # type: ignore[name-defined]
             params = {k: fn(trial) for k, fn in self._search_space.items()}
             result = self._engine.run(is_bars, strategy_params=params)
-            return result.metrics.get(self._objective_metric, -999.0)
+            score = float(result.metrics.get(self._objective_metric, -999.0))
+            if not np.isfinite(score):
+                return -999.0
+            ts = result.equity_timestamps
+            year_rets = {}
+            if ts is not None and len(ts) == len(result.equity_curve):
+                from engine.metrics import calendar_year_returns
+
+                year_rets = calendar_year_returns(
+                    result.equity_curve, ts, min_bars=self._min_year_bars
+                )
+            if self._require_all_years_profitable:
+                if not year_rets:
+                    return -999.0
+                if any(
+                    (not np.isfinite(r)) or r < self._min_year_return - 1e-12
+                    for r in year_rets.values()
+                ):
+                    return -999.0
+            # Prefer higher CAGR/total return and a higher worst calendar year.
+            total_ret = float(result.metrics.get("total_return", 0.0) or 0.0)
+            if not np.isfinite(total_ret):
+                total_ret = 0.0
+            worst_year = min(year_rets.values()) if year_rets else 0.0
+            if self._objective_metric == "cagr":
+                score = 2.0 * float(worst_year) + score + 0.35 * total_ret
+            elif year_rets:
+                score = score + 1.5 * float(worst_year)
+            return score
 
         study = optuna.create_study(direction="maximize")  # type: ignore[union-attr]
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
 
-        best_params = study.best_params
+        # Prefer a feasible trial when the year-profit constraint rejected most runs.
+        feasible = [
+            t
+            for t in study.trials
+            if t.value is not None and np.isfinite(t.value) and float(t.value) > -998.0
+        ]
+        if feasible:
+            best_trial = max(feasible, key=lambda t: float(t.value))  # type: ignore[arg-type]
+            best_params = dict(best_trial.params)
+        else:
+            best_params = dict(study.best_params)
         best_result = self._engine.run(is_bars, strategy_params=best_params)
         return best_params, best_result
 

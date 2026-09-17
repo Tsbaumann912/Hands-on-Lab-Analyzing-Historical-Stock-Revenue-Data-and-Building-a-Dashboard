@@ -46,6 +46,32 @@ class StrategyConfig:
     exit_z_score: float = 0.5
     lookback: int = 50
     signal_strength_scaling: bool = True
+    # ── CL / energy risk-premia knobs (docs/CL_RESEARCH.md) ─────────────────
+    carry_back_month: int = 3
+    carry_basis_lookback: int = 63
+    carry_strength_atr_mult: float = 1.0
+    carry_mom_lookback: int = 10
+    carry_mom_z_max: float = 2.0
+    fast_ma_period: int = 20
+    slow_ma_period: int = 50
+    stoch_rsi_period: int = 14
+    stoch_rsi_stoch_period: int = 14
+    stoch_rsi_k: int = 3
+    stoch_rsi_d: int = 3
+    stoch_rsi_oversold: float = 20.0
+    stoch_rsi_overbought: float = 80.0
+    tsmom_horizon_short: int = 20
+    tsmom_horizon_med: int = 60
+    tsmom_horizon_long: int = 120
+    tsmom_z_cap: float = 3.0
+    vol_target_annual: float = 0.12
+    ewma_vol_com: float = 60.0
+    reaction_b: float = 1.0
+    vol_target_leverage_cap: float = 2.0
+    inventory_enabled: bool = True
+    inventory_sma: int = 60
+    inventory_expect_window: int = 8
+    inventory_confirm_scale: bool = True
 
 
 @dataclass
@@ -57,6 +83,7 @@ class RiskConfig:
     default_take_profit_atr_mult: float = 4.0
     max_leverage: float = 10.0
     halt_on_breach: bool = True
+    risk_fraction: float = 0.01                 # equity fraction risked per trade (Kelly)
 
 
 @dataclass
@@ -92,6 +119,7 @@ class BacktestConfig:
     metrics: List[str] = field(
         default_factory=lambda: ["sharpe", "sortino", "max_drawdown", "calmar"]
     )
+    risk_free_rate: float = 0.05
 
 
 @dataclass
@@ -119,6 +147,49 @@ class AnalysisConfig:
     in_sample_ratio: float = 0.70
     walk_forward_trials: int = 25
     walk_forward_timeout_seconds: int = 90
+
+
+@dataclass
+class CLValidationConfig:
+    """Anchored / rolling WFO promotion gates for Light Crude Oil research."""
+
+    start_date: str = "2008-01-01"
+    capital: float = 350_000_000.0
+    strategy: str = "CLCarryMomentum"
+    anchored_min_is_years: float = 3.0
+    oos_years: float = 1.0
+    step_years: float = 1.0
+    rolling_is_years: float = 5.0
+    rolling_oos_years: float = 1.0
+    purge_bars: int = 5
+    n_trials: int = 50
+    timeout_seconds: int = 180
+    max_dd_limit: float = 0.30
+    min_sharpe: float = 0.0
+    min_upi: float = 0.0
+    min_cagr: float = 0.0
+    # Research validation: allow system DD up to the promotion gate (not 3% daily halt).
+    risk_max_daily_drawdown_pct: float = 0.99
+    risk_halt_on_breach: bool = False
+    # 0.0 = uncapped notional; RiskManager skips the equity-% ceiling.
+    risk_max_position_size_pct: float = 0.0
+    risk_max_leverage: float = 10.0
+    periods_per_year: int = 252
+    # Futures risk premia are usually evaluated vs 0 cash yield in the futures P&L.
+    metrics_risk_free_rate: float = 0.0
+    oos_warmup_bars: int = 320
+    # Re-optimisation: maximise CAGR (+ total-return blend) subject to yearly profits.
+    objective_metric: str = "cagr"
+    require_all_years_profitable: bool = True
+    require_oos_windows_profitable: bool = False
+    optuna_require_years_profitable: bool = True
+    min_year_return: float = 0.0
+    min_year_pass_fraction: float = 0.60
+    max_year_loss: float = -0.08
+    min_year_bars: int = 60
+    risk_fraction: float = 0.02
+    year_profit_lock_pct: float = 0.001
+    year_loss_stop: bool = True
 
 
 @dataclass
@@ -161,6 +232,7 @@ class Config:
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    cl_validation: CLValidationConfig = field(default_factory=CLValidationConfig)
     contracts: Dict[str, ContractSpec] = field(default_factory=dict)
     market_intelligence: MarketIntelligenceConfig = field(
         default_factory=MarketIntelligenceConfig
@@ -211,6 +283,7 @@ class Config:
             broker=BrokerConfig(**raw.get("broker", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
             analysis=AnalysisConfig(**raw.get("analysis", {})),
+            cl_validation=CLValidationConfig(**raw.get("cl_validation", {})),
             contracts=cls._parse_contracts(raw),
             market_intelligence=cls._parse_market_intelligence(raw),
             log_level=raw.get("log_level", "INFO"),

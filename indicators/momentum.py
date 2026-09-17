@@ -152,3 +152,86 @@ def stochastic_oscillator(
 
     pct_d = _ema_of(pct_k, d_period)
     return StochasticResult(pct_k, pct_d)
+
+
+class StochasticRSIResult(NamedTuple):
+    stoch_rsi: np.ndarray
+    pct_k: np.ndarray
+    pct_d: np.ndarray
+
+
+def stochastic_rsi(
+    close: np.ndarray,
+    rsi_period: int = 14,
+    stoch_period: int = 14,
+    k_period: int = 3,
+    d_period: int = 3,
+) -> Optional[StochasticRSIResult]:
+    """
+    Stochastic RSI — stochastic applied to RSI values (0–100 scale).
+
+    ``StochRSI = 100 * (RSI - min_n(RSI)) / (max_n(RSI) - min_n(RSI))``,
+    then %K / %D are SMA smooths of StochRSI.
+
+    Returns ``None`` when the series is shorter than the warm-up window.
+    """
+    min_len = rsi_period + stoch_period + k_period + d_period
+    if _validate_warmup(close, min_len, "StochasticRSI") is None:
+        return None
+
+    rsi_vals = rsi(close, rsi_period)
+    if rsi_vals is None:
+        return None
+
+    n = len(close)
+    stoch = np.full(n, np.nan, dtype=np.float64)
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    # Only windows where RSI is finite contribute; leading RSI NaNs stay NaN.
+    rsi_f = rsi_vals.astype(np.float64)
+    # Replace leading NaNs with a fill that won't enter windows until warm-up.
+    first_valid = int(np.argmax(np.isfinite(rsi_f)))
+    if not np.isfinite(rsi_f[first_valid]):
+        return None
+
+    usable = rsi_f[first_valid:]
+    if len(usable) < stoch_period:
+        return None
+
+    windows = sliding_window_view(usable, stoch_period)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        r_max = np.nanmax(windows, axis=-1)
+        r_min = np.nanmin(windows, axis=-1)
+        denom = r_max - r_min
+        raw = np.where(
+            (~np.isfinite(denom)) | (denom == 0.0),
+            50.0,
+            100.0 * (usable[stoch_period - 1 :] - r_min) / denom,
+        )
+    # Align raw StochRSI onto full length (index of last bar in each window).
+    start_idx = first_valid + stoch_period - 1
+    stoch[start_idx : start_idx + len(raw)] = raw
+
+    pct_k = _sma_of(stoch, k_period)
+    pct_d = _sma_of(pct_k, d_period)
+    return StochasticRSIResult(stoch_rsi=stoch, pct_k=pct_k, pct_d=pct_d)
+
+
+def _sma_of(arr: np.ndarray, period: int) -> np.ndarray:
+    """Trailing SMA that preserves NaNs until a full finite window exists."""
+    import warnings
+
+    out = np.full_like(arr, np.nan, dtype=np.float64)
+    if period < 1 or len(arr) < period:
+        return out
+    from numpy.lib.stride_tricks import sliding_window_view
+
+    windows = sliding_window_view(arr.astype(np.float64), period)
+    finite = np.sum(np.isfinite(windows), axis=-1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        with np.errstate(invalid="ignore"):
+            means = np.nanmean(windows, axis=-1)
+    means = np.where(finite >= period, means, np.nan)
+    out[period - 1 :] = means
+    return out

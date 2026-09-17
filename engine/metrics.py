@@ -7,9 +7,79 @@ No loops over individual return observations.
 
 from __future__ import annotations
 
-from typing import Dict
+from datetime import datetime
+from typing import Dict, Sequence, Union
 
 import numpy as np
+
+
+TimestampLike = Union[datetime, np.datetime64]
+
+
+def _year_of(ts: TimestampLike) -> int:
+    if isinstance(ts, np.datetime64):
+        return int(str(ts.astype("datetime64[Y]")))
+    return int(ts.year)
+
+
+def calendar_year_returns(
+    equity_curve: np.ndarray,
+    timestamps: Sequence[TimestampLike],
+    *,
+    min_bars: int = 2,
+) -> Dict[int, float]:
+    """
+    Calendar-year total returns from a stamped equity path.
+
+    For each calendar year with at least ``min_bars`` equity points, return is
+    ``(year_end - year_start_basis) / year_start_basis`` where the basis is the
+    equity immediately before the year's first point when available (true
+    calendar P&L), otherwise the first point in the year.
+    """
+    eq = np.asarray(equity_curve, dtype=np.float64)
+    if len(eq) < 2 or len(timestamps) != len(eq):
+        return {}
+
+    years = np.asarray([_year_of(t) for t in timestamps], dtype=np.int32)
+    out: Dict[int, float] = {}
+    for y in np.unique(years):
+        idx = np.flatnonzero(years == y)
+        if len(idx) < min_bars:
+            continue
+        start_i = int(idx[0])
+        end_i = int(idx[-1])
+        start_eq = float(eq[start_i - 1]) if start_i > 0 else float(eq[start_i])
+        end_eq = float(eq[end_i])
+        if not np.isfinite(start_eq) or start_eq == 0.0:
+            continue
+        out[int(y)] = float((end_eq - start_eq) / start_eq)
+    return out
+
+
+def all_calendar_years_profitable(
+    equity_curve: np.ndarray,
+    timestamps: Sequence[TimestampLike],
+    *,
+    min_bars: int = 2,
+    min_year_return: float = 0.0,
+) -> tuple[bool, Dict[int, float], list[str]]:
+    """
+    Return ``(ok, year_returns, failures)``.
+
+    ``ok`` is True iff every evaluated calendar year has return ``> min_year_return``.
+    """
+    year_rets = calendar_year_returns(
+        equity_curve, timestamps, min_bars=min_bars
+    )
+    failures: list[str] = []
+    if not year_rets:
+        failures.append("no_calendar_years_evaluable")
+        return False, year_rets, failures
+    for y, r in sorted(year_rets.items()):
+        # Non-losing calendar years: require return >= min_year_return (default 0).
+        if not np.isfinite(r) or r < min_year_return - 1e-12:
+            failures.append(f"year_{y}_return={r:.6f} < {min_year_return}")
+    return len(failures) == 0, year_rets, failures
 
 
 def compute_metrics(
@@ -46,7 +116,12 @@ def compute_metrics(
     # ── Basic return stats ─────────────────────────────────────────────────
     total_return = (eq[-1] - eq[0]) / eq[0]
     n_years = len(returns) / periods_per_year
-    cagr = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0.0
+    if n_years > 0 and (1.0 + total_return) > 0.0:
+        cagr = (1.0 + total_return) ** (1.0 / n_years) - 1.0
+    elif n_years > 0 and total_return <= -1.0:
+        cagr = -1.0
+    else:
+        cagr = 0.0
 
     # ── Risk-adjusted return ───────────────────────────────────────────────
     rf_period = (1 + risk_free_rate) ** (1 / periods_per_year) - 1
@@ -68,6 +143,11 @@ def compute_metrics(
     cummax = np.maximum.accumulate(eq)
     drawdowns = np.where(cummax > 0, (eq - cummax) / cummax, 0.0)
     max_drawdown = drawdowns.min()
+
+    # Ulcer Index: RMS of percentage drawdowns (Martin & McCann).
+    # Drawdowns are ≤ 0; square removes the sign.
+    ulcer_index = float(np.sqrt(np.mean(drawdowns * drawdowns)))
+    ulcer_performance_index = float(cagr / (ulcer_index + 1e-9))
 
     calmar = cagr / (abs(max_drawdown) + 1e-9)
 
@@ -91,6 +171,8 @@ def compute_metrics(
         "sharpe_ratio": round(float(sharpe), 4),
         "sortino_ratio": round(float(sortino), 4),
         "max_drawdown": round(float(max_drawdown), 6),
+        "ulcer_index": round(ulcer_index, 6),
+        "ulcer_performance_index": round(ulcer_performance_index, 4),
         "calmar_ratio": round(float(calmar), 4),
         "win_rate": round(float(win_rate), 4),
         "avg_win": round(float(avg_win), 6),
