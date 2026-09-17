@@ -1,0 +1,484 @@
+/*
+////////////////////////////////////////////////////////////////////////////
+// Copper Ensemble CTA — AmiBroker Formula Language (AFL) port
+// Source: copper_ensemble Python package (L_allgreen_maxprofit production)
+// Symbol: COMEX Copper (HG) — use PointValue = 25000 (full-size HG, USD/lb)
+//
+// AFL SYNTAX NOTES (quick reference learned for this port)
+//------------------------------------------------------------------------------
+// - Statements end with ';' ; case-insensitive identifiers
+// - Price arrays: O, H, L, C, V, OI ; time: Year(), Month(), Day(), BarIndex()
+// - Array ops are vectorised by default; use for() loops for bar-state machines
+// - IIf(cond, a, b) = element-wise ternary; Ref(x, -n) = past value
+// - MA / EMA / ATR / HHV / LLV / Sum / Cum are built-ins
+// - Buy/Sell/Short/Cover drive the backtester; PositionSize sets size
+// - ApplyStop() configures loss / profit / trailing stops
+// - SetOption / SetTradeDelays / PointValue configure futures backtests
+// - StaticVar* / _SECTION_BEGIN preserve state across bars / chart panes
+// - Custom backtester (EnableCustomBacktest + GetBacktesterObject) for equity
+//   overlays such as yearly profit lock and system DD halt
+//
+// PYTHON → AFL MAPPING
+//------------------------------------------------------------------------------
+// forecasts/__init__.py   → TSMOM / MA-cross / StochRSI sleeves below
+// blend/__init__.py       → majority-sign blend + agreement gate (+ FDM≈1)
+// sizing/__init__.py      → forecast buffer + vol-target contract count
+// risk/__init__.py        → yearly lock / Nov protect / DD halt (CBT phase)
+// strategy.py + engine    → ATR stop/TP via ApplyStop; trade on Close
+//
+// PARITY NOTES
+//------------------------------------------------------------------------------
+// 1. Production sizes off FIXED $500,000 equity (not live Equity()). Match
+//    that with Param("SizingEquity", 500000, ...).
+// 2. max_position_size_pct=15 means 15× leverage, NOT 15%.
+// 3. RSI here is SMA-based (matches Python), NOT Wilder RSI().
+// 4. Zero-weight sleeves (carry/basis/inventory/fade) omitted — agreement is
+//    computed on the three traded sleeves only (small parity difference).
+// 5. FDM set to 1.0 by default (Param toggle). Full 7-sleeve corr FDM is
+//    expensive in AFL; enable only if you add the other sleeves.
+// 6. Use Yahoo HG=F continuous or AmiBroker back-adjusted HG; rolls differ.
+////////////////////////////////////////////////////////////////////////////
+*/
+
+_SECTION_BEGIN("CopperEnsembleCTA");
+
+// ===== Parameters (production defaults from config/default.yaml) =====
+HorizFast          = Param("TSMOM horizon fast (bars)", 21, 5, 63, 1);
+HorizSlow          = Param("TSMOM horizon slow (bars)", 63, 21, 252, 1);
+WTsmom             = Param("Weight TSMOM", 0.50, 0, 1, 0.05);
+WMa                = Param("Weight MA cross", 0.25, 0, 1, 0.05);
+WStoch             = Param("Weight StochRSI", 0.25, 0, 1, 0.05);
+AgreeMin           = Param("Agreement min", 0.50, 0, 1, 0.05);
+ForecastCap        = Param("Forecast cap", 20, 5, 40, 1);
+BufferF            = Param("Forecast buffer", 2.5, 0, 10, 0.1);
+VolTarget          = Param("Vol target annual", 0.85, 0.10, 2.0, 0.05);
+EwmaCom            = Param("EWMA vol com days", 60, 10, 120, 1);
+KellyFrac          = Param("Kelly fraction", 1.0, 0.1, 2.0, 0.05);
+FastMA             = Param("Fast MA", 8, 2, 50, 1);
+SlowMA             = Param("Slow MA", 34, 10, 200, 1);
+RsiPeriod          = Param("RSI period (SMA)", 14, 5, 30, 1);
+StochPeriod        = Param("StochRSI period", 14, 5, 30, 1);
+SmoothK            = Param("Stoch smooth K", 3, 1, 10, 1);
+SmoothD            = Param("Stoch smooth D", 3, 1, 10, 1);
+StochOS            = Param("Stoch oversold", 0.20, 0, 0.5, 0.05);
+StochOB            = Param("Stoch overbought", 0.80, 0.5, 1, 0.05);
+AtrPeriod          = Param("ATR period", 14, 5, 40, 1);
+StopAtrMult        = Param("Stop ATR mult", 4.0, 1, 10, 0.5);
+TpAtrMult          = Param("Take-profit ATR mult", 20.0, 5, 40, 1);
+SizingEquity       = Param("Sizing equity (fixed $)", 500000, 50000, 5000000, 10000);
+MaxPosMult         = Param("Max position multiple of equity", 15.0, 1, 30, 0.5);
+MaxContracts       = Param("Max contracts", 80, 1, 200, 1);
+PointVal           = Param("Futures PointValue (HG=25000)", 25000, 100, 50000, 50);
+TickSz             = Param("Tick size", 0.0005, 0.0001, 0.01, 0.0001);
+CommissionPerSide  = Param("Commission $/contract/side", 2.25, 0, 20, 0.25);
+SlipTicks          = Param("Slippage ticks", 1, 0, 10, 1);
+YearlyLockPct      = Param("Yearly profit lock %", 0.5, 0.05, 10, 0.05); // 0.5% = 0.005
+YearlyLockMinDays  = Param("Yearly lock min days", 1, 1, 20, 1);
+NovProtect         = ParamToggle("November YTD protect", "Off|On", 1);
+DdHaltPct          = Param("System DD halt %", 45, 5, 90, 1);
+DdCooldownBars        = Param("DD halt cooldown bars", 21, 1, 100, 1);
+EnableFdm          = ParamToggle("Enable FDM (approx)", "Off|On", 0);
+ShowPlots          = ParamToggle("Plot sleeves / forecast", "Off|On", 1);
+
+SetChartOptions(0, chartShowDates);
+SetBarsRequired(300, 0);
+
+// ===== Backtester / futures setup =====
+SetTradeDelays(0, 0, 0, 0);
+BuyPrice  = Close;
+SellPrice = Close;
+ShortPrice = Close;
+CoverPrice = Close;
+
+SetOption("InitialEquity", SizingEquity);
+SetOption("FuturesMode", True);
+SetOption("PriceBoundChecking", True);
+SetOption("ActivateStopsImmediately", False); // trade on Close: check stops vs H-L, exit same bar
+SetOption("AllowSameBarExit", True);
+SetOption("HoldMinBars", 0);
+SetOption("UsePrevBarEquityForPosSizing", True);
+SetOption("CommissionMode", 3); // $ per contract / share
+SetOption("CommissionAmount", CommissionPerSide);
+SetOption("AccountMargin", 100); // sizing done explicitly via PositionSize
+RoundLotSize = 1;
+TickSize = TickSz;
+PointValue = PointVal;
+
+// Slippage ≈ half-spread model: SlipTicks * TickSize in price points
+Slippage = SlipTicks * TickSz;
+
+////////////////////////////////////////////////////////////////////////////
+// Helpers
+////////////////////////////////////////////////////////////////////////////
+
+function Nz(x, v)
+{
+    return IIf(IsNull(x), v, x);
+}
+
+// SMA-based RSI (matches Python copper_ensemble.forecasts.rsi — NOT Wilder)
+function RSI_SMA(price, period)
+{
+    local delta, gain, loss, avgGain, avgLoss, rs, out;
+    delta = price - Ref(price, -1);
+    gain = IIf(delta > 0, delta, 0);
+    loss = IIf(delta < 0, -delta, 0);
+    avgGain = MA(gain, period);
+    avgLoss = MA(loss, period);
+    rs = IIf(avgLoss < 1e-12, 1e12, avgGain / avgLoss);
+    out = 100 - (100 / (1 + rs));
+    out = IIf(IsNull(avgGain) OR IsNull(avgLoss), Null, out);
+    return out;
+}
+
+// Annualised EWMA volatility matching pandas ewm(com=N).mean() on r^2
+// alpha = 1/(1+com)
+function EWMAVolAnnual(price, comDays)
+{
+    local r, alpha, varEwma, i, j, n, r2, v;
+    r = price / Ref(price, -1) - 1;
+    alpha = 1 / (1 + comDays);
+    n = BarCount;
+    varEwma = Null;
+    // seed after comDays bars of simple variance, then recurse
+    for (i = 0; i < n; i++)
+    {
+        if (i == 0 OR IsNull(r[i]))
+        {
+            varEwma[i] = Null;
+        }
+        else
+        {
+            r2 = r[i] * r[i];
+            if (i < comDays OR IsNull(varEwma[i - 1]))
+            {
+                if (i >= comDays)
+                {
+                    v = 0;
+                    for (j = i - comDays + 1; j <= i; j++)
+                        v += Nz(r[j], 0) * Nz(r[j], 0);
+                    varEwma[i] = v / comDays;
+                }
+                else
+                    varEwma[i] = Null;
+            }
+            else
+                varEwma[i] = alpha * r2 + (1 - alpha) * varEwma[i - 1];
+        }
+    }
+    return sqrt(252 * varEwma);
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Sleeve A — TSMOM (multi-horizon sign of summed returns)
+////////////////////////////////////////////////////////////////////////////
+Ret = Close / Ref(Close, -1) - 1;
+SumFast = Sum(Ret, HorizFast);
+SumSlow = Sum(Ret, HorizSlow);
+SigFast = IIf(IsNull(SumFast), 0, sign(SumFast));
+SigSlow = IIf(IsNull(SumSlow), 0, sign(SumSlow));
+ValidFast = IIf(IsNull(SumFast), 0, 1);
+ValidSlow = IIf(IsNull(SumSlow), 0, 1);
+ValidN = ValidFast + ValidSlow;
+FTsmom = IIf(ValidN > 0, 10 * (SigFast + SigSlow) / ValidN, Null);
+FTsmom = Min(ForecastCap, Max(-ForecastCap, FTsmom));
+
+////////////////////////////////////////////////////////////////////////////
+// Sleeve F — MA cross (fast vs slow SMA separation)
+////////////////////////////////////////////////////////////////////////////
+SmaF = MA(Close, FastMA);
+SmaS = MA(Close, SlowMA);
+Sep = (SmaF - SmaS) / SmaS;
+StrengthMA = Min(1, Max(-1, Sep / 0.01)); // ~1% gap → full ±10
+FMa = 10 * StrengthMA;
+FMa = IIf(IsNull(SmaF) OR IsNull(SmaS), Null, FMa);
+FMa = Min(ForecastCap, Max(-ForecastCap, FMa));
+
+////////////////////////////////////////////////////////////////////////////
+// Sleeve G — Stochastic RSI (SMA RSI → stoch → %K)
+////////////////////////////////////////////////////////////////////////////
+RsiSma = RSI_SMA(Close, RsiPeriod);
+RsiLo = LLV(RsiSma, StochPeriod);
+RsiHi = HHV(RsiSma, StochPeriod);
+StochRaw = IIf((RsiHi - RsiLo) < 1e-12, 0.5, (RsiSma - RsiLo) / (RsiHi - RsiLo));
+StochRaw = Min(1, Max(0, StochRaw));
+StochK = MA(StochRaw, SmoothK);
+StochD = MA(StochK, SmoothD); // computed for plots; forecast uses %K only
+FStochCont = 10 * (0.5 - StochK) / 0.5; // 0→+10, 1→-10
+FStoch = FStochCont;
+FStoch = IIf(StochK <= StochOS, 10, FStoch);
+FStoch = IIf(StochK >= StochOB, -10, FStoch);
+FStoch = IIf(IsNull(StochK), Null, FStoch);
+FStoch = Min(ForecastCap, Max(-ForecastCap, FStoch));
+
+////////////////////////////////////////////////////////////////////////////
+// Blend — majority-sign sleeves only + agreement gate
+// (Python also includes zero-weight sleeves in agreement; we use traded 3)
+////////////////////////////////////////////////////////////////////////////
+Eps = 1.0;
+ATsmom = abs(Nz(FTsmom, 0)) > Eps;
+AMa    = abs(Nz(FMa, 0)) > Eps;
+AStoch = abs(Nz(FStoch, 0)) > Eps;
+
+STsmom = IIf(ATsmom, sign(FTsmom), 0);
+SMa    = IIf(AMa,    sign(FMa),    0);
+SStoch = IIf(AStoch, sign(FStoch), 0);
+
+NActive = ATsmom + AMa + AStoch;
+AgreeNum = abs(STsmom + SMa + SStoch);
+Agreement = IIf(NActive > 0, AgreeNum / NActive, 0);
+Maj = sign(STsmom + SMa + SStoch);
+
+// Keep sleeves aligned with majority; renormalise weights
+KeepT = ATsmom AND (STsmom == Maj) AND (Maj != 0);
+KeepM = AMa    AND (SMa    == Maj) AND (Maj != 0);
+KeepS = AStoch AND (SStoch == Maj) AND (Maj != 0);
+
+WSum = IIf(KeepT, WTsmom, 0) + IIf(KeepM, WMa, 0) + IIf(KeepS, WStoch, 0);
+RawBlend = IIf(WSum > 0,
+    (IIf(KeepT, WTsmom * Nz(FTsmom, 0), 0) +
+     IIf(KeepM, WMa    * Nz(FMa, 0),    0) +
+     IIf(KeepS, WStoch * Nz(FStoch, 0), 0)) / WSum,
+    0);
+
+Scaled = IIf(Agreement <= AgreeMin, 0, Agreement * RawBlend);
+Scaled = Min(ForecastCap, Max(-ForecastCap, Scaled));
+
+// Optional FDM ≈ 1 / sqrt(avg pairwise |corr| proxy) — simplified 3-sleeve
+Fdm = 1;
+if (EnableFdm)
+{
+    // Use correlation of forecast changes as a soft diversifier; capped at 2
+    dT = FTsmom - Ref(FTsmom, -1);
+    dM = FMa - Ref(FMa, -1);
+    dS = FStoch - Ref(FStoch, -1);
+    // Correlation via built-in Correlation(); warm-up → 1
+    cTM = Correlation(dT, dM, 126);
+    cTS = Correlation(dT, dS, 126);
+    cMS = Correlation(dM, dS, 126);
+    // w'Cw with equalised traded weights (renormalised)
+    w1 = WTsmom; w2 = WMa; w3 = WStoch;
+    ws = w1 + w2 + w3;
+    w1 /= ws; w2 /= ws; w3 /= ws;
+    portVar = w1*w1 + w2*w2 + w3*w3
+            + 2*w1*w2*Nz(cTM, 0)
+            + 2*w1*w3*Nz(cTS, 0)
+            + 2*w2*w3*Nz(cMS, 0);
+    Fdm = IIf(portVar <= 1e-12 OR IsNull(portVar), 1, Min(2.0, 1 / sqrt(portVar)));
+}
+
+FStar = Min(ForecastCap, Max(-ForecastCap, Scaled * Fdm));
+
+////////////////////////////////////////////////////////////////////////////
+// Forecast buffer (stateful — matches apply_forecast_buffer)
+////////////////////////////////////////////////////////////////////////////
+FBuf = 0;
+LastF = 0;
+for (i = 0; i < BarCount; i++)
+{
+    f = FStar[i];
+    if (IsNull(f))
+    {
+        FBuf[i] = 0;
+    }
+    else
+    {
+        if (abs(f - LastF) >= BufferF OR (LastF == 0 AND abs(f) >= BufferF))
+            LastF = f;
+        FBuf[i] = LastF;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Vol-target sizing → signed contracts (fixed SizingEquity)
+////////////////////////////////////////////////////////////////////////////
+VolAnn = EWMAVolAnnual(Close, EwmaCom);
+KellyScale = KellyFrac / 0.5; // 1.0 → 2×
+Strength = FBuf / 10;
+Notional = IIf(Nz(VolAnn, 0) > 1e-8,
+    Strength * (VolTarget / VolAnn) * SizingEquity * KellyScale,
+    0);
+RawContracts = IIf(Close > 0, Notional / (Close * PointVal), 0);
+
+CapByMult = (MaxPosMult * SizingEquity) / (Close * PointVal);
+Cap = Min(MaxContracts, abs(CapByMult));
+Contracts = Min(Cap, Max(-Cap, RawContracts));
+Contracts = IIf(IsNull(FBuf) OR IsNull(VolAnn), 0, Contracts);
+
+// Round to nearest lot; 0.5→1 minimum when cap allows
+Rounded = round(Contracts);
+NeedsMin = (abs(Contracts) >= 0.5) AND (abs(Rounded) < 1) AND (Cap >= 1);
+Rounded = IIf(NeedsMin, sign(Contracts), Rounded);
+TargetContracts = Rounded; // signed
+
+////////////////////////////////////////////////////////////////////////////
+// Entries / exits from target position (rebalance when |Δ| >= 1)
+////////////////////////////////////////////////////////////////////////////
+PrevTarget = Ref(TargetContracts, -1);
+PrevTarget = IIf(IsNull(PrevTarget), 0, PrevTarget);
+
+WantLong  = TargetContracts > 0;
+WantShort = TargetContracts < 0;
+WantFlat  = TargetContracts == 0;
+
+Buy   = WantLong  AND (PrevTarget <= 0); // enter / flip to long
+Sell  = WantFlat  AND (PrevTarget > 0);  // exit long to flat
+Short = WantShort AND (PrevTarget >= 0); // enter / flip to short
+Cover = WantFlat  AND (PrevTarget < 0);  // exit short to flat
+
+// Also reverse: long→short and short→long
+Buy   = Buy   OR (WantLong  AND PrevTarget < 0);
+Short = Short OR (WantShort AND PrevTarget > 0);
+Sell  = Sell  OR (WantShort AND PrevTarget > 0); // close long before short
+Cover = Cover OR (WantLong  AND PrevTarget < 0);
+
+// Position size = number of contracts (futures mode)
+PositionSize = abs(TargetContracts);
+
+////////////////////////////////////////////////////////////////////////////
+// ATR stop / take-profit (Wilder ATR via built-in ATR())
+// Matches engine: stop = 4*ATR, TP = 20*ATR from entry close
+////////////////////////////////////////////////////////////////////////////
+AtrVal = ATR(AtrPeriod);
+ApplyStop(stopTypeLoss,   stopModePoint, StopAtrMult * AtrVal, True, False, 1); // ExitAtStop=1, ReEntryDelay=1
+ApplyStop(stopTypeProfit, stopModePoint, TpAtrMult  * AtrVal, True, False, 1);
+
+////////////////////////////////////////////////////////////////////////////
+// Custom backtester — yearly profit lock + Nov protect + DD halt
+// Runs only in AA backtest; chart/exploration still use signals above.
+////////////////////////////////////////////////////////////////////////////
+SetCustomBacktestProc("");
+
+if (Status("action") == actionPortfolio)
+{
+    bo = GetBacktesterObject();
+    bo.PreProcess();
+
+    eqPeak = 0;
+    halted = 0;
+    barsSinceHalt = 0;
+    curYear = 0;
+    yearStartEq = 0;
+    daysInYear = 0;
+    yearlyLocked = 0;
+
+    lockFrac = YearlyLockPct / 100; // Param is in percent points (0.5 → 0.5%)
+    ddCap = DdHaltPct / 100;
+
+    for (bar = 0; bar < BarCount; bar++)
+    {
+        // Process signals / stops for this bar first
+        bo.ProcessTradeSignals(bar);
+
+        eq = bo.Equity;
+        if (eqPeak <= 0) eqPeak = eq;
+        if (eq > eqPeak) eqPeak = eq;
+        dd = IIf(eqPeak > 0, 1 - eq / eqPeak, 0);
+
+        y = Year();
+        m = Month();
+        // Year()/Month() are arrays — index them
+        yy = y[bar];
+        mm = m[bar];
+
+        // Yearly lock bookkeeping
+        if (curYear == 0)
+        {
+            curYear = yy;
+            yearStartEq = eq;
+            daysInYear = 0;
+            yearlyLocked = 0;
+        }
+        else if (yy != curYear)
+        {
+            curYear = yy;
+            yearStartEq = eq; // approx; Python uses prior_equity before MTM
+            daysInYear = 0;
+            yearlyLocked = 0;
+        }
+        daysInYear++;
+
+        ytd = IIf(yearStartEq > 0, eq / yearStartEq - 1, 0);
+        if (NOT yearlyLocked)
+        {
+            if (daysInYear >= YearlyLockMinDays AND ytd >= lockFrac)
+                yearlyLocked = 1;
+            if (NovProtect AND mm >= 11 AND ytd > 0)
+                yearlyLocked = 1;
+        }
+
+        // DD halt state machine
+        if (halted)
+        {
+            barsSinceHalt++;
+            if (dd <= 0.5 * ddCap OR barsSinceHalt >= DdCooldownBars)
+            {
+                halted = 0;
+                barsSinceHalt = 0;
+                eqPeak = eq; // reset high-water mark
+            }
+        }
+        else
+        {
+            if (dd >= ddCap)
+            {
+                halted = 1;
+                barsSinceHalt = 0;
+            }
+        }
+
+        // Force flat when locked or halted: close open positions
+        if (yearlyLocked OR halted)
+        {
+            for (openPos = bo.GetFirstOpenPos(); openPos; openPos = bo.GetNextOpenPos())
+            {
+                bo.ExitTrade(bar, openPos.Symbol, Close[bar]);
+            }
+        }
+    }
+
+    bo.PostProcess();
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Exploration / scan columns
+////////////////////////////////////////////////////////////////////////////
+Filter = 1;
+AddColumn(FTsmom, "F_tsmom", 1.2);
+AddColumn(FMa, "F_ma", 1.2);
+AddColumn(FStoch, "F_stoch", 1.2);
+AddColumn(Agreement, "Agree", 1.2);
+AddColumn(FStar, "F*", 1.2);
+AddColumn(FBuf, "F_buf", 1.2);
+AddColumn(VolAnn, "VolAnn", 1.3);
+AddColumn(TargetContracts, "TargetQty", 1.0);
+AddColumn(AtrVal, "ATR", 1.5);
+AddColumn(Buy, "Buy", 1.0);
+AddColumn(Sell, "Sell", 1.0);
+AddColumn(Short, "Short", 1.0);
+AddColumn(Cover, "Cover", 1.0);
+
+////////////////////////////////////////////////////////////////////////////
+// Plots
+////////////////////////////////////////////////////////////////////////////
+if (ShowPlots)
+{
+    Plot(Close, "HG Close", colorBlack, styleCandle);
+    Plot(SmaF, "SMA fast", colorBlue, styleLine);
+    Plot(SmaS, "SMA slow", colorRed, styleLine);
+
+    Plot(FBuf, "Forecast buffered", colorDarkGreen, styleLine | styleOwnScale | styleThick);
+    Plot(TargetContracts, "Target contracts", colorOrange, styleHistogram | styleOwnScale);
+
+    PlotShapes(IIf(Buy, shapeUpArrow, shapeNone), colorGreen, 0, L, -15);
+    PlotShapes(IIf(Sell, shapeDownArrow, shapeNone), colorRed, 0, H, -15);
+    PlotShapes(IIf(Short, shapeDownArrow, shapeNone), colorOrange, 0, H, -25);
+    PlotShapes(IIf(Cover, shapeUpArrow, shapeNone), colorBlue, 0, L, -25);
+}
+
+_N(Title = StrFormat(
+    "Copper Ensemble CTA (AFL) — {{NAME}} {{DATE}} C=%g | F*=%.2f Fbuf=%.2f Agree=%.2f Qty=%.0f Vol=%.2f ATR=%.5f",
+    C, Nz(FStar, 0), Nz(FBuf, 0), Nz(Agreement, 0), Nz(TargetContracts, 0),
+    Nz(VolAnn, 0), Nz(AtrVal, 0)));
+
+_SECTION_END();
