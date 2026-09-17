@@ -1,0 +1,328 @@
+///////////////////////////////////////////////////////////////////////////
+// PlatinumEnsemble_CTA.afl
+// AmiBroker Formula Language (AFL) port of the QuantTerminal / standalone
+// platinum_ensemble CTA (locked config from the all-years-green re-optimisation).
+//
+// Active sleeves (locked weights): inventory + macro-fade
+//   tsmom / carry / pl_gc_rv weights = 0 (code retained for completeness)
+// Long-only (short_scale = 0)
+// Year profit-lock + ATR stops + vol-targeted futures sizing
+//
+// Chart / AA symbol: NYMEX Platinum continuous (e.g. PL, PL=F, PA)
+// Put these symbols in your AmiBroker database (ParamStr overrides allowed):
+//   Gold:  GC
+//   USD:   DX   (ICE Dollar Index)
+//
+// Inventory: Python used a price-zscore proxy when warehouse stocks are
+// unavailable — same proxy is used here (optional OpenInterest override).
+//
+// Usage:
+//   1) Analysis → Formula Editor → Open this .afl → Tools → Verify Syntax
+//   2) Apply as Chart and/or Automatic Analysis backtest (Futures mode)
+//   3) Set Initial Equity to 350,000,000 for institutional parity
+///////////////////////////////////////////////////////////////////////////
+
+Version( 6.0 );
+
+// -------------------- Parameters (locked defaults from config/default.yaml)
+GoldTicker    = ParamStr( "Gold ticker", "GC" );
+UsdTicker     = ParamStr( "USD ticker", "DX" );
+UseOpenIntInv = ParamToggle( "Inventory source", "PriceProxy|OpenInterest", 0 );
+
+W_TSMOM = Param( "Weight TSMOM",     0.00, 0, 1, 0.01 );
+W_CARRY = Param( "Weight Carry",     0.00, 0, 1, 0.01 );
+W_PLGC  = Param( "Weight PL-GC RV",  0.00, 0, 1, 0.01 );
+W_INV   = Param( "Weight Inventory", 0.293409, 0, 1, 0.000001 );
+W_FADE  = Param( "Weight Fade",      0.706591, 0, 1, 0.000001 );
+
+ForecastCap  = Param( "Forecast cap",         20, 5, 30, 1 );
+AgreementMin = Param( "Agreement min",        0.103054, 0, 1, 0.000001 );
+FdmCap       = Param( "FDM cap",              2.877154, 1, 4, 0.000001 );
+VolTarget    = Param( "Vol target annual",    0.343281, 0.05, 0.50, 0.000001 );
+EwmaVolCom   = Param( "EWMA vol COM days",    60, 10, 120, 1 );
+FadeZ        = Param( "Fade z",               0.931983, 0.5, 3.0, 0.000001 );
+BufferF      = Param( "Forecast buffer",      3.729472, 0.5, 10, 0.000001 );
+KellyFrac    = Param( "Kelly fraction",       0.394965, 0.05, 1.0, 0.000001 );
+InvSma       = Param( "Inventory SMA",        60, 20, 120, 1 );
+InvDeltaDays = Param( "Inventory delta days", 20, 5, 60, 1 );
+RvLookback   = Param( "RV lookback",          63, 20, 126, 1 );
+RvEntryZ     = Param( "RV entry z",           1.463286, 0.5, 3.0, 0.000001 );
+PriceZLen    = Param( "Price z lookback",     20, 5, 60, 1 );
+AtrPeriod    = Param( "ATR period",           14, 5, 40, 1 );
+StopAtrMult  = Param( "Stop ATR mult",        3.647497, 1, 6, 0.000001 );
+TpAtrMult    = Param( "Take profit ATR mult", 4.0, 1, 8, 0.1 );
+ShortScale   = Param( "Short scale",          0.0, 0, 1, 0.01 ); // locked long-only
+YearLockPct  = Param( "Year profit lock %",   0.5791, 0, 5, 0.0001 ); // 0.005791 as percent
+YearLockMinDays = Param( "Year lock min days", 5, 1, 30, 1 );
+InvRequireFadeAgree = ParamToggle( "Inventory requires fade agree", "No|Yes", 1 );
+
+MaxPosPct     = Param( "Max position % equity", 39.0196, 1, 100, 0.01 );
+MaxLeverage   = Param( "Max leverage", 3.200407, 0.5, 10, 0.000001 );
+PointValue    = Param( "Contract multiplier (oz)", 50, 1, 100, 1 ); // PL = 50 troy oz
+InitialEquity = Param( "Initial equity $", 350000000, 100000, 1e9, 1000 );
+CashRfAnnual  = Param( "Idle cash interest annual", 0.02, 0, 0.10, 0.001 );
+MarginFrac    = Param( "Margin fraction", 0.12, 0.01, 0.5, 0.01 );
+
+SetOption( "InitialEquity", InitialEquity );
+SetOption( "FuturesMode", True );
+SetOption( "PriceBoundChecking", False );
+SetOption( "CommissionMode", 3 ); // $ per contract
+SetOption( "CommissionAmount", 2.25 );
+SetOption( "AccountMargin", 100 * MarginFrac );
+SetOption( "MaxOpenPositions", 1 );
+SetOption( "AllowSameBarExit", True );
+SetTradeDelays( 0, 0, 0, 0 );
+BuyPrice = SellPrice = ShortPrice = CoverPrice = Close;
+TickSize = 0.1;
+RoundLotSize = 1;
+
+// -------------------- Helpers
+function SafeDiv( num, den )
+{
+    return IIf( den == 0 OR IsNull( den ), 0, num / den );
+}
+
+function ZScore( src, len )
+{
+    mu = MA( src, len );
+    sd = StDev( src, len );
+    return IIf( sd > 1e-12, ( src - mu ) / sd, Null );
+}
+
+function ClipVal( x, cap )
+{
+    return Min( cap, Max( -cap, x ) );
+}
+
+function SignOf( x )
+{
+    return IIf( x > 0, 1, IIf( x < 0, -1, 0 ) );
+}
+
+function EwmaVolAnnual( rets, comDays )
+{
+    alpha = 1 / ( comDays + 1 );
+    span = Max( 2, round( 2 / alpha - 1 ) );
+    v = EMA( rets * rets, span );
+    return sqrt( v * 252 );
+}
+
+// -------------------- Foreign / features
+GoldC = Foreign( GoldTicker, "C", 1 );
+UsdC  = Foreign( UsdTicker, "C", 1 );
+
+Rets = ROC( C, 1 ) / 100;
+GoldRet20 = ROC( GoldC, 20 ) / 100;
+UsdRet20  = ROC( UsdC, 20 ) / 100;
+
+Carry = MA( Rets, 63 ); // same proxy as Python yfinance loader
+
+PxZ60 = ZScore( C, 60 );
+InvProxy = 80000 - 8000 * Nz( PxZ60, 0 );
+Inventory = IIf( UseOpenIntInv AND OpenInt > 0, OpenInt, InvProxy );
+
+VolAnn = EwmaVolAnnual( Rets, EwmaVolCom );
+AtrVal = ATR( AtrPeriod );
+
+// -------------------- Sleeve A: TSMOM
+S1 = Sum( Rets, 21 );
+S2 = Sum( Rets, 63 );
+S3 = Sum( Rets, 252 );
+Acc = SignOf( S1 ) + SignOf( S2 ) + SignOf( S3 );
+Valid = IIf( NOT IsNull( S1 ), 1, 0 ) + IIf( NOT IsNull( S2 ), 1, 0 ) + IIf( NOT IsNull( S3 ), 1, 0 );
+F_Tsmom = ClipVal( IIf( Valid > 0, 10 * Acc / Valid, 0 ), ForecastCap );
+
+// -------------------- Sleeve B: Carry
+F_Carry = ClipVal( 10 * ZScore( Carry, Max( 63, RvLookback ) ), ForecastCap );
+
+// -------------------- Sleeve C: PL–GC RV
+LnPL = log( Max( C, 1e-12 ) );
+LnGC = log( Max( GoldC, 1e-12 ) );
+Beta = Correlation( LnPL, LnGC, RvLookback ) * SafeDiv( StDev( LnPL, RvLookback ), StDev( LnGC, RvLookback ) );
+Spread = LnPL - Beta * LnGC;
+Zsp = ZScore( Spread, RvLookback );
+Strength = Min( 1, Abs( Zsp ) / Max( RvEntryZ, 1e-6 ) );
+F_PlGc = ClipVal( ( -10 * Zsp ) * Strength, ForecastCap );
+
+// -------------------- Sleeve D: Inventory trend
+R63 = Sum( Rets, 63 );
+DInv = Inventory - Ref( Inventory, -InvDeltaDays );
+F_Inv0 = IIf( R63 > 0 AND DInv < 0, 10, IIf( R63 < 0 AND DInv > 0, -10, 0 ) );
+F_Inv0 = ClipVal( F_Inv0, ForecastCap );
+
+// -------------------- Sleeve E: Macro fade
+Zpx = ZScore( C, PriceZLen );
+BullMacro = GoldRet20 > 0 AND UsdRet20 <= 0;
+BearMacro = GoldRet20 < 0 AND UsdRet20 > 0;
+F_Fade0 = IIf( Zpx > FadeZ AND NOT BullMacro, -10, IIf( Zpx < -FadeZ AND NOT BearMacro, 10, 0 ) );
+
+R252 = Sum( Rets, 252 );
+InvMu = MA( Inventory, InvSma );
+InvSd = StDev( Inventory, InvSma );
+ZinvTight = IIf( InvSd > 1e-12, -( Inventory - InvMu ) / InvSd, 0 );
+Structural = ( NOT IsNull( R252 ) ) AND ( SignOf( R252 ) == SignOf( ZinvTight ) )
+             AND ( SignOf( R252 ) != 0 ) AND ( Abs( ZinvTight ) > 0.5 );
+F_Fade0 = IIf( Structural, 0, F_Fade0 );
+
+AlignedTI = ( SignOf( F_Tsmom ) == SignOf( F_Inv0 ) ) AND Abs( F_Tsmom ) > 5 AND Abs( F_Inv0 ) > 5;
+F_Fade = IIf( AlignedTI, 0, ClipVal( F_Fade0, ForecastCap ) );
+
+SameIF = ( SignOf( F_Inv0 ) == SignOf( F_Fade ) ) AND Abs( F_Fade ) > 1;
+F_Inv = IIf( InvRequireFadeAgree, IIf( SameIF, F_Inv0, 0 ), F_Inv0 );
+
+// -------------------- Blend
+Wsum = Max( W_TSMOM + W_CARRY + W_PLGC + W_INV + W_FADE, 1e-12 );
+wT = W_TSMOM / Wsum; wC = W_CARRY / Wsum; wP = W_PLGC / Wsum;
+wI = W_INV / Wsum;   wF = W_FADE / Wsum;
+
+Eps = 1.0;
+A_T = Abs( F_Tsmom ) > Eps; A_C = Abs( F_Carry ) > Eps; A_P = Abs( F_PlGc ) > Eps;
+A_I = Abs( F_Inv ) > Eps;   A_F = Abs( F_Fade ) > Eps;
+NActive = A_T + A_C + A_P + A_I + A_F;
+AgreeNum = Abs( IIf( A_T, SignOf( F_Tsmom ), 0 ) + IIf( A_C, SignOf( F_Carry ), 0 )
+              + IIf( A_P, SignOf( F_PlGc ), 0 ) + IIf( A_I, SignOf( F_Inv ), 0 )
+              + IIf( A_F, SignOf( F_Fade ), 0 ) );
+Agreement = IIf( NActive > 0, AgreeNum / NActive, 0 );
+
+Maj = SignOf( IIf( A_T, SignOf( F_Tsmom ), 0 ) + IIf( A_C, SignOf( F_Carry ), 0 )
+            + IIf( A_P, SignOf( F_PlGc ), 0 ) + IIf( A_I, SignOf( F_Inv ), 0 )
+            + IIf( A_F, SignOf( F_Fade ), 0 ) );
+
+KeepT = A_T AND SignOf( F_Tsmom ) == Maj AND Maj != 0;
+KeepC = A_C AND SignOf( F_Carry ) == Maj AND Maj != 0;
+KeepP = A_P AND SignOf( F_PlGc ) == Maj AND Maj != 0;
+KeepI = A_I AND SignOf( F_Inv ) == Maj AND Maj != 0;
+KeepF = A_F AND SignOf( F_Fade ) == Maj AND Maj != 0;
+
+Wrow = IIf( KeepT, wT, 0 ) + IIf( KeepC, wC, 0 ) + IIf( KeepP, wP, 0 )
+     + IIf( KeepI, wI, 0 ) + IIf( KeepF, wF, 0 );
+RawBlend = IIf( Wrow > 0,
+    ( IIf( KeepT, wT * F_Tsmom, 0 ) + IIf( KeepC, wC * F_Carry, 0 )
+    + IIf( KeepP, wP * F_PlGc, 0 ) + IIf( KeepI, wI * F_Inv, 0 )
+    + IIf( KeepF, wF * F_Fade, 0 ) ) / Wrow, 0 );
+
+Scaled = IIf( Agreement < AgreementMin, 0, Agreement * RawBlend );
+Scaled = ClipVal( Scaled, ForecastCap );
+
+// FDM proxy from sleeve-change correlations
+dT = F_Tsmom - Ref( F_Tsmom, -1 ); dC = F_Carry - Ref( F_Carry, -1 );
+dP = F_PlGc - Ref( F_PlGc, -1 );   dI = F_Inv - Ref( F_Inv, -1 );
+dF = F_Fade - Ref( F_Fade, -1 );
+Lb = 126;
+cTI = Correlation( dT, dI, Lb ); cTF = Correlation( dT, dF, Lb ); cIF = Correlation( dI, dF, Lb );
+cTC = Correlation( dT, dC, Lb ); cTP = Correlation( dT, dP, Lb ); cCI = Correlation( dC, dI, Lb );
+PortVar = wT*wT + wC*wC + wP*wP + wI*wI + wF*wF
+        + 2*wT*wC*Nz(cTC,0) + 2*wT*wP*Nz(cTP,0) + 2*wT*wI*Nz(cTI,0) + 2*wT*wF*Nz(cTF,0)
+        + 2*wI*wF*Nz(cIF,0) + 2*wC*wI*Nz(cCI,0);
+Fdm = Min( FdmCap, SafeDiv( 1, sqrt( Max( PortVar, 1e-12 ) ) ) );
+FStar = ClipVal( Scaled * Fdm, ForecastCap );
+
+// -------------------- Forecast buffer (bar loop)
+FBuf = 0;
+LastF = 0;
+for( i = 0; i < BarCount; i++ )
+{
+    f = FStar[i];
+    if( IsNull( f ) )
+    {
+        FBuf[i] = 0;
+    }
+    else
+    {
+        if( abs( f - LastF ) >= BufferF OR ( LastF == 0 AND abs( f ) >= BufferF ) )
+            LastF = f;
+        FBuf[i] = LastF;
+    }
+}
+
+// -------------------- Vol-targeted contracts
+Strength = FBuf / 10;
+KellyScale = KellyFrac / 0.5;
+Notional = Strength * SafeDiv( VolTarget, Max( VolAnn, 1e-8 ) ) * InitialEquity * KellyScale;
+ContractsRaw = SafeDiv( Notional, C * PointValue );
+CapByPct = SafeDiv( ( MaxPosPct / 100 ) * InitialEquity, C * PointValue );
+CapByLev = SafeDiv( MaxLeverage * InitialEquity, C * PointValue );
+CapN = Min( 10000, Min( CapByPct, CapByLev ) );
+Contracts = round( Min( CapN, Max( -CapN, ContractsRaw ) ) );
+Contracts = IIf( IsNull( FBuf ) OR IsNull( VolAnn ), 0, Contracts );
+TargetContracts = IIf( Contracts > 0, Contracts,
+                  IIf( Contracts < 0 AND ShortScale > 0, round( Contracts * ShortScale ), 0 ) );
+
+// -------------------- Year profit-lock via equity proxy loop
+EqProxy = InitialEquity;
+YearStartEq = InitialEquity;
+CurYear = 0;
+DaysInYear = 0;
+YearLocked = 0;
+PrevClose = C[0];
+LockFrac = YearLockPct / 100;
+AllowTrade = 1;
+PrevPos = 0;
+
+for( i = 0; i < BarCount; i++ )
+{
+    y = Year()[i];
+    if( i == 0 OR y != CurYear )
+    {
+        CurYear = y;
+        YearStartEq = EqProxy;
+        YearLocked = 0;
+        DaysInYear = 0;
+    }
+    DaysInYear++;
+
+    if( i > 0 )
+        EqProxy = EqProxy + PrevPos * PointValue * ( C[i] - PrevClose );
+
+    notional_i = abs( PrevPos ) * C[i] * PointValue;
+    margin_i = notional_i * MarginFrac;
+    idle_i = Max( 0, EqProxy - margin_i );
+    EqProxy = EqProxy + idle_i * ( CashRfAnnual / 252 );
+
+    ytd = IIf( YearStartEq > 0, EqProxy / YearStartEq - 1, 0 );
+    if( YearLocked == 0 AND DaysInYear >= YearLockMinDays AND ytd >= LockFrac )
+        YearLocked = 1;
+
+    AllowTrade[i] = IIf( YearLocked, 0, 1 );
+    PrevClose = C[i];
+    PrevPos = IIf( AllowTrade[i], TargetContracts[i], 0 );
+}
+
+PosSize = IIf( AllowTrade, abs( TargetContracts ), 0 );
+WantLong  = AllowTrade AND TargetContracts > 0;
+WantShort = AllowTrade AND TargetContracts < 0 AND ShortScale > 0;
+
+InLong  = Flip( WantLong, NOT WantLong );
+InShort = Flip( WantShort, NOT WantShort );
+
+Buy   = WantLong AND NOT Ref( InLong, -1 );
+Sell  = Ref( InLong, -1 ) AND NOT WantLong;
+Short = WantShort AND NOT Ref( InShort, -1 );
+Cover = Ref( InShort, -1 ) AND NOT WantShort;
+
+SetPositionSize( PosSize, spsShares );
+
+ApplyStop( stopTypeLoss,   stopModePoint, StopAtrMult * AtrVal, True, True );
+ApplyStop( stopTypeProfit, stopModePoint, TpAtrMult * AtrVal, True, True );
+
+// -------------------- Plot / Explore
+Plot( C, "PL Close", colorBlack, styleCandle );
+Plot( FBuf, "F* buffered", colorBlue, styleOwnScale | styleLine );
+Plot( Agreement, "Agreement", colorOrange, styleOwnScale | styleDots );
+Plot( IIf( AllowTrade, TargetContracts, 0 ), "Target contracts", colorGreen, styleOwnScale | styleHistogram );
+
+Filter = 1;
+AddColumn( F_Inv, "F_Inv", 1.2 );
+AddColumn( F_Fade, "F_Fade", 1.2 );
+AddColumn( FBuf, "F*", 1.2 );
+AddColumn( Agreement, "Agree", 1.3 );
+AddColumn( TargetContracts, "Contracts", 1.0 );
+AddColumn( AllowTrade, "Allow", 1.0 );
+AddColumn( VolAnn, "VolAnn", 1.3 );
+
+_N( Title = "{{NAME}} — PlatinumEnsemble CTA | F* buffered + year lock "
+    + WriteVal( YearLockPct, 1.4 ) + "% | VolTarget=" + WriteVal( VolTarget, 1.3 ) );
+
+///////////////////////////////////////////////////////////////////////////
+// END OF FILE
+///////////////////////////////////////////////////////////////////////////
