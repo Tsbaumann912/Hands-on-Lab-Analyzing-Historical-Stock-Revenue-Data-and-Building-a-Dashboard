@@ -4,7 +4,7 @@ Academy — educational curriculum for futures & forex profit strategies.
 
 from __future__ import annotations
 
-from dash import Input, Output, State, callback, dcc, html, ALL, ctx
+from dash import ALL, Input, Output, State, callback, ctx, dcc, html
 
 from app.academy_catalog import MODULES, module_by_slug
 from app.components import page_header, section_card
@@ -135,13 +135,14 @@ def _select_module(n_clicks: list[int], current: str) -> str:
 @callback(
     Output("academy-markdown", "children"),
     Output("academy-module-meta", "children"),
-    Output("academy-module-list", "children"),
+    Output({"type": "academy-mod-btn", "slug": ALL}, "className"),
     Input("academy-active-slug", "data"),
 )
 def _render_module(slug: str):
-    module = module_by_slug(slug or "syllabus")
-    return (
-        module.read_markdown(),
-        _meta_block(module.slug),
-        _module_buttons(module.slug),
-    )
+    active = slug or "syllabus"
+    module = module_by_slug(active)
+    classes = [
+        "academy-mod-btn active" if m.slug == module.slug else "academy-mod-btn"
+        for m in MODULES
+    ]
+    return module.read_markdown(), _meta_block(module.slug), classes
