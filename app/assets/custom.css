@@ -1570,6 +1570,38 @@ input[type="number"]:focus {
   padding-right: 4px;
 }
 
+.academy-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.academy-radio-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.35;
+  padding: 8px 10px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  background: var(--apple-bg-secondary);
+  cursor: pointer;
+  color: var(--apple-text);
+}
+
+.academy-radio-label:has(input:checked),
+.academy-radio input:checked + .academy-radio-label {
+  background: rgba(0, 113, 227, 0.08);
+  border-color: rgba(0, 113, 227, 0.35);
+}
+
+.academy-radio-input {
+  margin-right: 8px;
+}
+
 .academy-mod-btn {
   display: flex;
   flex-direction: column;
