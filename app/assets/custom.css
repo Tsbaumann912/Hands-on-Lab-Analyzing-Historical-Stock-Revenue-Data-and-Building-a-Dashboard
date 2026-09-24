@@ -1561,6 +1561,53 @@ input[type="number"]:focus {
   gap: 12px;
 }
 
+.academy-module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.academy-mod-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--apple-border);
+  background: var(--apple-bg-secondary);
+  border-radius: var(--apple-radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--apple-text);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.academy-mod-btn:hover {
+  background: #fff;
+  border-color: var(--apple-border-strong);
+}
+
+.academy-mod-btn.active {
+  background: rgba(0, 113, 227, 0.08);
+  border-color: rgba(0, 113, 227, 0.35);
+}
+
+.academy-mod-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.academy-mod-summary {
+  font-size: 11px;
+  color: var(--apple-text-tertiary);
+  line-height: 1.35;
+}
+
 .academy-meta {
   font-size: 14px;
   color: var(--apple-text-secondary);
