@@ -16,6 +16,7 @@ NAV_ITEMS = [
     {"id": "nav-indicators",   "label": "Indicators",  "page": "/indicators"},
     {"id": "nav-strategy-lab", "label": "Strategies",  "page": "/strategy-lab"},
     {"id": "nav-risk",         "label": "Risk",        "page": "/risk"},
+    {"id": "nav-academy",      "label": "Academy",     "page": "/academy"},
 ]
 
 

@@ -1,6 +1,7 @@
 """Page modules for the QuantTerminal desktop application."""
 
 from app.pages import (
+    academy,
     charts,
     dashboard,
     futures_terminal,
@@ -11,6 +12,7 @@ from app.pages import (
 )
 
 __all__ = [
+    "academy",
     "charts",
     "dashboard",
     "futures_terminal",

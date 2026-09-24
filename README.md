@@ -67,6 +67,7 @@ The canonical URL is stored in `PUBLIC_URL`. Cloudflare quick tunnels stay at th
 | **Indicator Explorer** | 5-panel synchronised chart: Price+BB+EMA → RSI → MACD → ATR → OBV |
 | **Strategy Lab** | Configure strategy parameters with sliders, run backtests, view equity curve + fills table + all performance metrics |
 | **Risk Console** | Drawdown speedometer gauge, risk-limit utilisation bars, equity history, open positions table |
+| **Academy** | Futures & forex strategy curriculum (30 named edges), curated CME/Babypips videos and web links (`docs/academy/`) |
 
 ### Credentials (optional)
 

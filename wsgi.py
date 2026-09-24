@@ -37,6 +37,7 @@ from app.api.market_intelligence_routes import market_intel_bp
 
 # Import page modules (they register their own callbacks via @callback)
 from app.pages import (
+    academy,
     charts,
     dashboard,
     futures_terminal,
@@ -221,6 +222,7 @@ PAGE_MAP = {
     "/indicators":  indicator_explorer.layout,
     "/strategy-lab":strategy_lab.layout,
     "/risk":        risk_console.layout,
+    "/academy":     academy.layout,
 }
 
 
