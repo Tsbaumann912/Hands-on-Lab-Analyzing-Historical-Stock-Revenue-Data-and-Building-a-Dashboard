@@ -36,26 +36,34 @@ python3 wsgi.py
 # The app opens at: http://127.0.0.1:8050
 ```
 
-## Public URL (Cloudflare Tunnel)
+## Public URL (always-on tunnel)
 
-Open QuantTerminal in any browser:
+`http://127.0.0.1:8050` only works **inside the Cloud Agent VM**.
 
-**https://pts-instructor-almost-temperatures.trycloudflare.com**
-
-Start the app and tunnel together:
+Start the supervised public link (restarts the app + Cloudflare tunnel if they die):
 
 ```bash
 ./start-public.sh
 ```
 
-Or start them separately:
+Then open the URL written to `PUBLIC_URL` (also printed by the script). Academy:
 
-```bash
-python3 wsgi.py    # local server on :8050
-./expose.sh        # Cloudflare quick tunnel only
+```text
+$(cat PUBLIC_URL)/academy
 ```
 
-The canonical URL is stored in `PUBLIC_URL`. Cloudflare quick tunnels stay at the same address while `cloudflared` keeps running; if you restart the tunnel, run `./expose.sh` and update `PUBLIC_URL` with the new link.
+**Stability notes**
+- `./keep-public.sh` (launched by `start-public.sh`) keeps *a* public URL online continuously.
+- Cloudflare *quick* tunnels may mint a **new** `*.trycloudflare.com` hostname if the tunnel process itself is recreated; `PUBLIC_URL` is updated automatically.
+- For a **fixed forever hostname**, set Cloud Agent secrets and re-run:
+
+```bash
+export CLOUDFLARE_TUNNEL_TOKEN="..."          # Cloudflare Zero Trust named tunnel
+export PUBLIC_BASE_URL="https://your.domain" # hostname routed to that tunnel
+./start-public.sh
+```
+
+Or deploy the included `Dockerfile` / `Procfile` to Railway / Hugging Face Spaces for a permanent PaaS URL.
 
 ### Desktop Application Pages
 
@@ -67,6 +75,7 @@ The canonical URL is stored in `PUBLIC_URL`. Cloudflare quick tunnels stay at th
 | **Indicator Explorer** | 5-panel synchronised chart: Price+BB+EMA → RSI → MACD → ATR → OBV |
 | **Strategy Lab** | Configure strategy parameters with sliders, run backtests, view equity curve + fills table + all performance metrics |
 | **Risk Console** | Drawdown speedometer gauge, risk-limit utilisation bars, equity history, open positions table |
+| **Academy** | Futures & forex strategy curriculum (30 named edges), curated CME/Babypips videos and web links (`docs/academy/`) |
 
 ### Credentials (optional)
 
