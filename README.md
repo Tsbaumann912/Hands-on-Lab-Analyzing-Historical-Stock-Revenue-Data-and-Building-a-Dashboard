@@ -38,9 +38,17 @@ python3 wsgi.py
 
 ## Public URL (Cloudflare Tunnel)
 
-Open QuantTerminal in any browser:
+`http://127.0.0.1:8050` only works **inside the Cloud Agent VM**. From your
+laptop/browser use the live tunnel URL in `PUBLIC_URL` (quick tunnels change
+when `cloudflared` restarts).
 
-**https://pts-instructor-almost-temperatures.trycloudflare.com**
+Current tunnel (while running):
+
+**https://opportunity-dealers-bite-qualified.trycloudflare.com**
+
+Academy page:
+
+**https://opportunity-dealers-bite-qualified.trycloudflare.com/academy**
 
 Start the app and tunnel together:
 
