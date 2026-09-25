@@ -34,14 +34,19 @@ unrelated to the terminal.
 
 ### Running the app (Dash)
 - Start the dev server: `export PATH="$HOME/.local/bin:$PATH"; python3 wsgi.py`
-  → serves at `http://127.0.0.1:8050`. Health check: `GET /health` → `ok`.
+ → serves at `http://127.0.0.1:8050`. Health check: `GET /health` → `ok`.
+- **Public always-on link (from your laptop):** `./start-public.sh` launches
+ `keep-public.sh` in tmux — it restarts the app + Cloudflare tunnel if they
+ die and writes the live URL to `PUBLIC_URL`. Academy is `${PUBLIC_URL}/academy`.
+ Quick tunnels may change hostname if the tunnel process itself restarts; for a
+ fixed hostname set secrets `CLOUDFLARE_TUNNEL_TOKEN` + `PUBLIC_BASE_URL`.
 - Key pages: `/` (Overview), `/charts`, `/futures`, `/indicators`,
  `/strategy-lab` (Strategies — backtest / optimize / walk-forward), `/risk`,
  `/academy` (Futures & Forex educational curriculum — 30 strategy edges,
  markdown under `docs/academy/`).
 - Production entry: `gunicorn wsgi:server` (Procfile / Dockerfile use this).
 - Headless static Plotly export works via `kaleido` (`fig.write_image(...)`);
-  interactive charts render in the browser.
+ interactive charts render in the browser.
 
 ### Lint / test
 - Test suite: `export PATH="$HOME/.local/bin:$PATH"; python3 -m pytest tests/ -q`

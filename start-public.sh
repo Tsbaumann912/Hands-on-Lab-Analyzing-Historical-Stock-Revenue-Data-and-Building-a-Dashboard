@@ -1,103 +1,90 @@
 #!/usr/bin/env bash
-# ── Start QuantTerminal + Cloudflare public tunnel ────────────────────────────
-# Starts the Dash server and a Cloudflare quick tunnel so you can open the app
-# from any browser.
+# ── Start QuantTerminal with a continuously supervised public URL ─────────────
+# Launches keep-public.sh in tmux so the Dash app + Cloudflare tunnel restart
+# automatically if they die. Writes the live URL to PUBLIC_URL.
 #
 # Usage: ./start-public.sh
 #
-# Canonical URL (while tunnel is running):
-#   https://pts-instructor-almost-temperatures.trycloudflare.com
+# Optional (stable hostname — recommended for production):
+#   export CLOUDFLARE_TUNNEL_TOKEN=...   # named tunnel token from Zero Trust
+#   export PUBLIC_BASE_URL=https://quant.example.com
 #
-# Note: trycloudflare.com URLs are tied to the running cloudflared process.
-# If you restart the tunnel, run ./expose.sh to get the new URL and update PUBLIC_URL.
+# Without a named-tunnel token, Cloudflare issues a new trycloudflare.com
+# hostname whenever the quick tunnel process is recreated. keep-public.sh
+# keeps *a* public URL alive continuously and updates PUBLIC_URL.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PORT="${PORT:-8050}"
-CF_BIN="/tmp/cloudflared"
-LOG="/tmp/cloudflared.log"
 TMUX_CONF="${TMUX_CONF:-/exec-daemon/tmux.portal.conf}"
-APP_SESSION="quant-terminal-dev"
-TUNNEL_SESSION="cloudflared-tunnel"
+KEEP_SESSION="${KEEP_SESSION:-quant-keep-public}"
 
 tmux_cmd() {
-  tmux -f "$TMUX_CONF" "$@"
+  if [ -f "$TMUX_CONF" ]; then
+    tmux -f "$TMUX_CONF" "$@"
+  else
+    tmux "$@"
+  fi
 }
 
-start_app() {
-  if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    echo "App already running on port ${PORT}"
-    return
-  fi
+chmod +x "$SCRIPT_DIR/keep-public.sh"
 
-  if ! tmux_cmd has-session -t "=$APP_SESSION" 2>/dev/null; then
-    tmux_cmd new-session -d -s "$APP_SESSION" -c "$SCRIPT_DIR" -- "${SHELL:-bash}" -l
-  fi
-
-  tmux_cmd send-keys -t "$APP_SESSION:0.0" "cd '$SCRIPT_DIR' && python3 wsgi.py" C-m
-  echo "Starting app on port ${PORT}..."
-
-  for _ in $(seq 1 30); do
-    if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-      echo "App ready at http://127.0.0.1:${PORT}"
-      return
-    fi
-    sleep 1
-  done
-
-  echo "Error: app did not start on port ${PORT}" >&2
-  exit 1
-}
-
-start_tunnel() {
-  if [ ! -x "$CF_BIN" ]; then
-    echo "Downloading cloudflared..."
-    curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o "$CF_BIN"
-    chmod +x "$CF_BIN"
-  fi
-
-  # Reuse existing tunnel if still running
-  if pgrep -f "cloudflared tunnel --url http://127.0.0.1:${PORT}" >/dev/null 2>&1; then
-    URL=$(rg -o 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)
-    if [ -z "$URL" ] && [ -f PUBLIC_URL ]; then
-      URL=$(tr -d '[:space:]' < PUBLIC_URL)
-    fi
-    if [ -n "$URL" ]; then
-      echo "Tunnel already running: $URL"
-      return
-    fi
-  fi
-
-  pkill -f "cloudflared tunnel --url http://127.0.0.1:${PORT}" 2>/dev/null || true
+# Restart supervisor cleanly
+if tmux_cmd has-session -t "=$KEEP_SESSION" 2>/dev/null; then
+  # Stop previous keep-public loop (session may hold the supervisor)
+  OLD_PID="$(tmux_cmd list-panes -t "$KEEP_SESSION:0.0" -F '#{pane_pid}' 2>/dev/null || true)"
+  tmux_cmd kill-session -t "$KEEP_SESSION" 2>/dev/null || true
   sleep 1
-
-  if ! tmux_cmd has-session -t "=$TUNNEL_SESSION" 2>/dev/null; then
-    tmux_cmd new-session -d -s "$TUNNEL_SESSION" -c "$SCRIPT_DIR" -- "${SHELL:-bash}" -l
+  if [ -n "${OLD_PID:-}" ]; then
+    # Only kill the supervisor shell tree, not unrelated processes
+    kill "$OLD_PID" 2>/dev/null || true
   fi
+fi
 
-  tmux_cmd send-keys -t "$TUNNEL_SESSION:0.0" \
-    "'$CF_BIN' tunnel --url http://127.0.0.1:${PORT} --no-autoupdate 2>&1 | tee '$LOG'" C-m
+tmux_cmd new-session -d -s "$KEEP_SESSION" -c "$SCRIPT_DIR" -- bash -l
+tmux_cmd send-keys -t "$KEEP_SESSION:0.0" \
+  "cd '$SCRIPT_DIR' && exec ./keep-public.sh" C-m
 
-  for _ in $(seq 1 30); do
-    URL=$(rg -o 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)
+echo "Supervisor started in tmux session: $KEEP_SESSION"
+echo "Waiting for PUBLIC_URL..."
+
+for _ in $(seq 1 60); do
+  if [ -f PUBLIC_URL ]; then
+    URL="$(tr -d '[:space:]' < PUBLIC_URL)"
     if [ -n "$URL" ]; then
-      echo "$URL" > PUBLIC_URL
-      echo ""
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "  QuantTerminal is live at:"
-      echo "  $URL"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      return
+      # Prefer health via forced public DNS (VM local DNS can miss trycloudflare)
+      HOST="${URL#https://}"
+      IP="$(dig +short "$HOST" @1.1.1.1 2>/dev/null | head -1 || true)"
+      if [ -n "$IP" ]; then
+        CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "$HOST:443:$IP" "$URL/health" || true)"
+        if [ "$CODE" = "200" ]; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  QuantTerminal is live (supervised):"
+          echo "  $URL"
+          echo "  Academy: ${URL}/academy"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "URL is kept alive by ./keep-public.sh (restarts app/tunnel on failure)."
+          echo "Follow logs:  tmux -f $TMUX_CONF attach -t $KEEP_SESSION"
+          exit 0
+        fi
+      fi
+      # Fall back: local health + printed URL (external DNS may still be propagating)
+      if curl -sf --max-time 3 "http://127.0.0.1:${PORT:-8050}/health" >/dev/null; then
+        echo ""
+        echo "App is up locally. Public URL (propagating): $URL"
+        echo "Academy: ${URL}/academy"
+        exit 0
+      fi
     fi
-    sleep 1
-  done
+  fi
+  sleep 1
+done
 
-  echo "Error: timed out waiting for tunnel URL. Check $LOG" >&2
-  exit 1
-}
-
-start_app
-start_tunnel
+echo "Timed out waiting for a healthy public URL. Check:"
+echo "  tmux -f $TMUX_CONF attach -t $KEEP_SESSION"
+echo "  tail -50 /tmp/cloudflared.log /tmp/quantterminal-app.log"
+exit 1
